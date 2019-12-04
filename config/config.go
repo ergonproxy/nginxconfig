@@ -1,20 +1,23 @@
 package config
 
 import (
+	"net"
+	"net/url"
 	"time"
 )
 
 type Events struct {
 	AcceptMutex       bool          `nginx:"accept_mutex,off"`
 	AcceptMutextDelay time.Duration `nginx:"accept_mutex_delay,500ms"`
-	DebugConnection   []string      `nginx:"debug_connection"`
+	DebugConnection   []*Connection `nginx:"debug_connection"`
 	MultiAccept       bool          `nginx:"master_process"`
 	Use               string        `nginx:"use"`
 	WorkerAIORequests int           `nginx:"worker_aio_requests"`
 	WorkerConnections int           `nginx:"worker_connections"`
 }
 
-type Base struct {
+// Core configuration for core nginx functionality
+type Core struct {
 	Daemon                bool          `nginx:"daemon,off"`
 	DebugPoints           string        `nginx:"debug_points"`
 	Env                   []KV          `nginx:"env"`
@@ -27,14 +30,19 @@ type Base struct {
 	ThreadPool            *ThreadPool   `nginx:"thread_pool"`
 	TimerResolution       string        `nginx:"timer_resolution"`
 	User                  *User         `nginx:"user"`
+	Events                *Events       `nginx:"events"`
 	WorkerCPUAffinity     string        `nginx:"worker_cpu_affinity"`
 	WorkerPriority        int           `nginx:"worker_priority"`
 	WorkerProcess         int           `nginx:"worker_processes"`
 	WorkerRLimitNoFile    int           `nginx:"worker_rlimit_nofile"`
 	WorkerShutdownTimeout time.Duration `nginx:"worker_shutdown_timeout"`
 	WorkingDirectory      string        `nginx:"working_directory"`
-	HTTP                  *HTTP         `nginx:"http"`
 	LogSubrequests        bool          `nginx:"log_subrequest"`
+}
+
+type Base struct {
+	Core Core  `nginx:"core"`
+	HTTP *HTTP `nginx:"http"`
 }
 
 type KV struct {
@@ -218,4 +226,19 @@ type Listen struct {
 	IPv6Only      bool
 	ReusePort     bool
 	SoKeepalive   string
+}
+
+type ConnType uint
+
+const (
+	Address ConnType = 1 + iota
+	CIDR
+	IP
+)
+
+type Connection struct {
+	Type ConnType
+	IP   net.IP
+	Net  *net.IPNet
+	URL  *url.URL
 }
