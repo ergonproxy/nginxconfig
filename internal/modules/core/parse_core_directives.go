@@ -86,5 +86,4 @@ func events(d *config.Directive) (*config.Events, error) {
 		return nil, e
 	}
 	return &ev, nil
-
 }
