@@ -15,7 +15,7 @@ func Core(d *config.Directive) (config.Core, error) {
 	}
 	e := config.NewError("core", d.Name)
 	var c config.Core
-	for _, child := range d.Body {
+	for _, child := range d.Body.Blocks {
 		switch child.Name {
 		case "events":
 			c.Events, err = events(child)
@@ -61,7 +61,7 @@ func events(d *config.Directive) (*config.Events, error) {
 	}
 	e := config.NewError("core", d.Name)
 	var ev config.Events
-	for _, child := range d.Body {
+	for _, child := range d.Body.Blocks {
 		switch child.Name {
 		case "accept_mutex":
 			ev.AcceptMutex, err = acceptMutex(child)

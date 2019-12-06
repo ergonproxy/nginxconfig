@@ -34,8 +34,13 @@ type Directive struct {
 	Name       string
 	Start, End Position
 	Params     []Token
-	Body       []*Directive
+	Body       *List
 	Comments   []Token
+}
+
+type List struct {
+	Start, End Position
+	Blocks     []*Directive
 }
 
 type ErrorList struct {
