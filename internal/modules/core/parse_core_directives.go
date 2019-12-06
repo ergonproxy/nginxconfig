@@ -1,7 +1,6 @@
 package core
 
 import (
-	"net"
 	"time"
 
 	"github.com/ergongate/nginxconfig/config"
@@ -9,28 +8,29 @@ import (
 )
 
 // Core iterates on directives for core configurations.
-func Core(directive *config.Directive) (config.Core, error) {
-	e := config.NewError("core", directive.Name)
-	if directive.Name != "main" {
-		// we only parse core functionality from the main directive. This is
-		// equivalent to nginx global context or main.
-		e.Add(directive.Error("expect main directive"))
-		return config.Core{}, e
+func Core(d *config.Directive) (config.Core, error) {
+	err := d.BasicCheck("main", 0)
+	if err != nil {
+		return config.Core{}, err
 	}
+	e := config.NewError("core", d.Name)
 	var c config.Core
+	for _, child := range d.Body {
+		switch child.Name {
+		case "events":
+			c.Events, err = events(child)
+			if err != nil {
+				e.Add(err)
+			}
+		}
+	}
 	if e.HasErrors() {
 		return c, e
 	}
 	return c, nil
 }
 
-// AcceptMutex parses nginx accept_mutex directive.
-//
-// If accept_mutex is enabled, worker processes will accept new connections by
-// turn. Otherwise, all worker processes will be notified about new connections,
-// and if volume of new connections is low, some of the worker processes may
-// just waste system resources
-func AcceptMutex(d *config.Directive) (bool, error) {
+func acceptMutex(d *config.Directive) (bool, error) {
 	err := d.BasicCheck("accept_mutex", 1, "events")
 	if err != nil {
 		return false, err
@@ -42,8 +42,7 @@ func AcceptMutex(d *config.Directive) (bool, error) {
 	return v, nil
 }
 
-// AcceptMutexDelay parses accept_mutex_delay directive to time.Duration
-func AcceptMutexDelay(d *config.Directive) (time.Duration, error) {
+func acceptMutexDelay(d *config.Directive) (time.Duration, error) {
 	err := d.BasicCheck("accept_mutex_delay", 1, "events")
 	if err != nil {
 		return 0, err
@@ -52,6 +51,40 @@ func AcceptMutexDelay(d *config.Directive) (time.Duration, error) {
 	if err != nil {
 		return 0, d.Params[0].Error(err.Error())
 	}
-	net.Dial()
 	return v, nil
+}
+
+func events(d *config.Directive) (*config.Events, error) {
+	err := d.BasicCheck("events", 0, "main")
+	if err != nil {
+		return nil, err
+	}
+	e := config.NewError("core", d.Name)
+	var ev config.Events
+	for _, child := range d.Body {
+		switch child.Name {
+		case "accept_mutex":
+			ev.AcceptMutex, err = acceptMutex(child)
+			if err != nil {
+				e.Add(err)
+			}
+		case "accept_mutex_delay":
+			ev.AcceptMutextDelay, err = acceptMutexDelay(child)
+			if err != nil {
+				e.Add(err)
+			}
+		case "debug_connection":
+		case "master_process":
+		case "use":
+		case "worker_aio_requests":
+		case "worker_connections":
+		default:
+			e.Add(child.Error("Unknown directive"))
+		}
+	}
+	if e.HasErrors() {
+		return nil, e
+	}
+	return &ev, nil
+
 }
