@@ -1,6 +1,9 @@
 package config
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 type Position struct {
 	Filename string // filename, if any
@@ -49,8 +52,20 @@ type ErrorList struct {
 	Errors    []error
 }
 
-func (e ErrorList) Error() string {
-	return ""
+func (e *ErrorList) Error() string {
+	return strings.Join(e.ToErrors(), "\n")
+}
+
+func (e ErrorList) ToErrors() []string {
+	errs := []string{}
+	for _, v := range e.Errors {
+		if ev, ok := v.(*ErrorList); ok {
+			errs = append(errs, ev.ToErrors()...)
+		} else {
+			errs = append(errs, v.Error())
+		}
+	}
+	return errs
 }
 
 func (e *ErrorList) Add(n error) {
