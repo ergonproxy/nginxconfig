@@ -3,6 +3,8 @@ package config
 import (
 	"net"
 	"net/url"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -210,7 +212,7 @@ type LimitAccept struct {
 }
 
 type Listen struct {
-	Address       string
+	Address       *Connection
 	SSL           bool
 	HTTP2         bool
 	SPDY          bool
@@ -231,14 +233,67 @@ type Listen struct {
 type ConnType uint
 
 const (
-	Address ConnType = 1 + iota
-	CIDR
-	IP
+	Local ConnType = 1 + iota
+	Remote
+	Socket
 )
 
+// Connection represent various kinds of address that nginx accepts through
+// configuration.
 type Connection struct {
-	Type ConnType
+	Type      ConnType
+	Localhost bool
+	// This means we are listening to all interfaces. It can be defined by
+	// *:80
+	All  bool
+	Port int
 	IP   net.IP
 	Net  *net.IPNet
 	URL  *url.URL
+}
+
+func (c *Connection) String() string {
+	switch c.Type {
+	case Remote:
+		// fully qualified url we are dealing with here. So either url or CIDR
+		if c.URL != nil {
+			return c.URL.String()
+		}
+		if c.Net != nil {
+			return c.Net.String()
+		}
+		return ""
+	case Socket:
+		if c.URL != nil {
+			return "unix:" + c.URL.Path
+		}
+		return ""
+	case Local:
+		var h string
+		if c.Localhost {
+			h = "localhost"
+		}
+		if c.IP != nil {
+			h = c.IP.String()
+
+		}
+		if c.All {
+			h = "*"
+		}
+		if c.Port != 0 {
+			p := strconv.FormatInt(int64(c.Port), 10)
+			if h != "" {
+				h = net.JoinHostPort(h, p)
+			} else {
+				h = p
+			}
+		} else {
+			if strings.IndexByte(h, ':') >= 0 {
+				h = "[" + h + "]"
+			}
+		}
+		return h
+	default:
+		return ""
+	}
 }
