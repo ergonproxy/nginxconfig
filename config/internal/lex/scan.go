@@ -12,7 +12,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/ergongate/nginxconfig/config"
+	"github.com/ergongate/nginxconfig/config/nginx"
 )
 
 const (
@@ -106,7 +106,7 @@ type Scanner struct {
 	// the scanner is not inside a token. Call Pos to obtain an error
 	// position in that case, or to obtain the position immediately
 	// after the most recently scanned token.
-	config.Position
+	nginx.Position
 }
 
 // Init initializes a Scanner with a new source and returns s.
@@ -520,7 +520,7 @@ func (s *Scanner) Scan() rune {
 // the character or token returned by the last call to Next or Scan.
 // Use the Scanner's Position field for the start position of the most
 // recently scanned token.
-func (s *Scanner) Pos() (pos config.Position) {
+func (s *Scanner) Pos() (pos nginx.Position) {
 	pos.Filename = s.Filename
 	pos.Offset = s.srcBufOffset + s.srcPos - s.lastCharLen
 	switch {

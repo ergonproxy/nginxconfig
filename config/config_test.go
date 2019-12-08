@@ -1,4 +1,4 @@
-package nginx
+package config
 
 import (
 	"encoding/json"

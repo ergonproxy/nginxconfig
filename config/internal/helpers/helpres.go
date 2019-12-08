@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ergongate/nginxconfig/config"
+	"github.com/ergongate/nginxconfig/config/nginx"
 )
 
 // regexp for matching url
@@ -49,14 +49,14 @@ func ParseDuration(txt string) (time.Duration, error) {
 
 // ParseConnection parses common connection strings expected by nginx
 // address | CIDR | unix:
-func ParseConnection(txt string) (*config.Connection, error) {
+func ParseConnection(txt string) (*nginx.Connection, error) {
 	if regURLPORT.MatchString(txt) {
 		if strings.HasPrefix(txt, "*:") {
 			pn, err := strconv.Atoi(txt[2:])
 			if err != nil {
 				return nil, err
 			}
-			return &config.Connection{Type: config.Local, All: true, Port: pn}, nil
+			return &nginx.Connection{Type: nginx.Local, All: true, Port: pn}, nil
 		}
 		host, port, err := net.SplitHostPort(txt)
 		if err != nil {
@@ -66,7 +66,7 @@ func ParseConnection(txt string) (*config.Connection, error) {
 		if err != nil {
 			return nil, err
 		}
-		c := &config.Connection{Type: config.Local, Port: pn}
+		c := &nginx.Connection{Type: nginx.Local, Port: pn}
 		if host == "localhost" {
 			c.Localhost = true
 		}
@@ -79,11 +79,11 @@ func ParseConnection(txt string) (*config.Connection, error) {
 		if err != nil {
 			return nil, ErrUknownConnection
 		}
-		c.Type = config.Remote
+		c.Type = nginx.Remote
 		if u.Scheme == "unix" {
-			c.Type = config.Socket
+			c.Type = nginx.Socket
 		} else {
-			c.Type = config.Remote
+			c.Type = nginx.Remote
 		}
 		c.URL = u
 		return c, nil
@@ -94,7 +94,7 @@ func ParseConnection(txt string) (*config.Connection, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &config.Connection{Type: config.Local, Port: pn}, nil
+		return &nginx.Connection{Type: nginx.Local, Port: pn}, nil
 	}
 	if txt[0] == '[' && txt[len(txt)-1] == ']' {
 		//ipv6
@@ -102,19 +102,19 @@ func ParseConnection(txt string) (*config.Connection, error) {
 	}
 	ip := net.ParseIP(txt)
 	if ip != nil {
-		return &config.Connection{Type: config.Local, IP: ip}, nil
+		return &nginx.Connection{Type: nginx.Local, IP: ip}, nil
 	}
-	c := &config.Connection{}
+	c := &nginx.Connection{}
 	u, err := url.Parse(txt)
 	if err != nil {
 		fmt.Println(err)
 		return nil, ErrUknownConnection
 	}
-	c.Type = config.Remote
+	c.Type = nginx.Remote
 	if u.Scheme == "unix" {
-		c.Type = config.Socket
+		c.Type = nginx.Socket
 	} else {
-		c.Type = config.Remote
+		c.Type = nginx.Remote
 	}
 	c.URL = u
 	return c, nil

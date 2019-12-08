@@ -3,18 +3,18 @@ package core
 import (
 	"time"
 
-	"github.com/ergongate/nginxconfig/config"
-	"github.com/ergongate/nginxconfig/internal/helpers"
+	"github.com/ergongate/nginxconfig/config/internal/helpers"
+	"github.com/ergongate/nginxconfig/config/nginx"
 )
 
 // Core iterates on directives for core configurations.
-func Core(d *config.Directive) (config.Core, error) {
+func Core(d *nginx.Directive) (nginx.Core, error) {
 	err := d.BasicCheck("main", 0)
 	if err != nil {
-		return config.Core{}, err
+		return nginx.Core{}, err
 	}
-	e := config.NewError("core", d.Name)
-	var c config.Core
+	e := nginx.NewError("core", d.Name)
+	var c nginx.Core
 	for _, child := range d.Body.Blocks {
 		switch child.Name {
 		case "events":
@@ -30,19 +30,19 @@ func Core(d *config.Directive) (config.Core, error) {
 	return c, nil
 }
 
-func acceptMutex(d *config.Directive) (bool, error) {
+func acceptMutex(d *nginx.Directive) (bool, error) {
 	err := d.BasicCheck("accept_mutex", 1, "events")
 	if err != nil {
 		return false, err
 	}
 	v, err := helpers.ParseFlag(d.Params[0].Text)
 	if err != nil {
-		return false, config.ErrorAt(err.Error(), &d.Params[0].Start)
+		return false, nginx.ErrorAt(err.Error(), &d.Params[0].Start)
 	}
 	return v, nil
 }
 
-func acceptMutexDelay(d *config.Directive) (time.Duration, error) {
+func acceptMutexDelay(d *nginx.Directive) (time.Duration, error) {
 	err := d.BasicCheck("accept_mutex_delay", 1, "events")
 	if err != nil {
 		return 0, err
@@ -54,13 +54,13 @@ func acceptMutexDelay(d *config.Directive) (time.Duration, error) {
 	return v, nil
 }
 
-func events(d *config.Directive) (*config.Events, error) {
+func events(d *nginx.Directive) (*nginx.Events, error) {
 	err := d.BasicCheck("events", 0, "main")
 	if err != nil {
 		return nil, err
 	}
-	e := config.NewError("core", d.Name)
-	var ev config.Events
+	e := nginx.NewError("core", d.Name)
+	var ev nginx.Events
 	for _, child := range d.Body.Blocks {
 		switch child.Name {
 		case "accept_mutex":

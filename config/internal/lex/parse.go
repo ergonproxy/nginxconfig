@@ -3,16 +3,16 @@ package lex
 import (
 	"io"
 
-	"github.com/ergongate/nginxconfig/config"
+	"github.com/ergongate/nginxconfig/config/nginx"
 )
 
 // File returns the top most directive.
-func File(file string, src io.Reader) (*config.Directive, error) {
+func File(file string, src io.Reader) (*nginx.Directive, error) {
 	s := new(Scanner).Init(src)
 	s.Filename = file
-	m := &config.Directive{
+	m := &nginx.Directive{
 		Name: "main",
-		Body: &config.List{
+		Body: &nginx.List{
 			Start: s.Pos(),
 		},
 	}
@@ -26,11 +26,11 @@ func File(file string, src io.Reader) (*config.Directive, error) {
 }
 
 func lex(s *Scanner,
-	parent *config.Directive,
+	parent *nginx.Directive,
 	ctx []string,
 	consume, checkCtx bool,
-) ([]*config.Directive, error) {
-	var parsed []*config.Directive
+) ([]*nginx.Directive, error) {
+	var parsed []*nginx.Directive
 	for tok := s.Scan(); tok != EOF; tok = s.Scan() {
 		if tok == RBrace {
 			if parsed != nil {
@@ -44,14 +44,14 @@ func lex(s *Scanner,
 			}
 			continue
 		}
-		stmt := &config.Directive{
+		stmt := &nginx.Directive{
 			Parent: parent,
 			Name:   s.TokenText(),
 			Start:  s.Position,
 		}
 		tok = s.Scan()
 		for !isSpecialToken(tok) {
-			stmt.Params = append(stmt.Params, config.Token{
+			stmt.Params = append(stmt.Params, nginx.Token{
 				Text:  s.TokenText(),
 				Start: s.Position,
 				End:   s.Pos(),
@@ -60,7 +60,7 @@ func lex(s *Scanner,
 		}
 		switch tok {
 		case LBrace:
-			stmt.Body = &config.List{
+			stmt.Body = &nginx.List{
 				Start: s.Position,
 			}
 			tkn, err := lex(s, stmt, enterBlockContext(stmt, ctx), false, false)

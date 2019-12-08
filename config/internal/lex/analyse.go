@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ergongate/nginxconfig/config"
+	"github.com/ergongate/nginxconfig/config/nginx"
 )
 
 const (
@@ -1454,14 +1454,14 @@ func toCtx(s ...string) string {
 	return ""
 }
 
-func enterBlockContext(stmt *config.Directive, ctx []string) []string {
+func enterBlockContext(stmt *nginx.Directive, ctx []string) []string {
 	if len(ctx) > 0 && ctx[0] == "http" && stmt.Name == "location" {
 		return []string{"http", "location"}
 	}
 	return append(ctx, stmt.Name)
 }
 
-func analyze(stmt *config.Directive, tok int, strict, checkCtx, checkArgs bool, ctx []string) error {
+func analyze(stmt *nginx.Directive, tok int, strict, checkCtx, checkArgs bool, ctx []string) error {
 	masks, ok := directives[stmt.Name]
 	if strict && !ok {
 		return fmt.Errorf("nginx:%s unknown directive %q", stmt.Start, stmt.Name)
