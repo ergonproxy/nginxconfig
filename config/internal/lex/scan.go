@@ -12,7 +12,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/ergongate/nginxconfig/config/nginx"
+	"github.com/ergongate/vince/config/nginx"
 )
 
 const (

@@ -3,8 +3,8 @@ package core
 import (
 	"time"
 
-	"github.com/ergongate/nginxconfig/config/internal/helpers"
-	"github.com/ergongate/nginxconfig/config/nginx"
+	"github.com/ergongate/vince/config/internal/helpers"
+	"github.com/ergongate/vince/config/nginx"
 )
 
 // Core iterates on directives for core configurations.

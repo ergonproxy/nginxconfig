@@ -3,7 +3,7 @@ package lex
 import (
 	"io"
 
-	"github.com/ergongate/nginxconfig/config/nginx"
+	"github.com/ergongate/vince/config/nginx"
 )
 
 // File returns the top most directive.

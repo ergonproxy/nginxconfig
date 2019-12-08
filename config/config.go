@@ -3,9 +3,9 @@ package config
 import (
 	"io"
 
-	"github.com/ergongate/nginxconfig/config/internal/base"
-	"github.com/ergongate/nginxconfig/config/internal/lex"
-	"github.com/ergongate/nginxconfig/config/nginx"
+	"github.com/ergongate/vince/config/internal/base"
+	"github.com/ergongate/vince/config/internal/lex"
+	"github.com/ergongate/vince/config/nginx"
 )
 
 // Config is the configuration object for vince. This is a valid nginx

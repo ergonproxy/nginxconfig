@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ergongate/nginxconfig/config/nginx"
+	"github.com/ergongate/vince/config/nginx"
 )
 
 // regexp for matching url

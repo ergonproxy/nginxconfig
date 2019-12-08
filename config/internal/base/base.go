@@ -1,8 +1,8 @@
 package base
 
 import (
-	"github.com/ergongate/nginxconfig/config/internal/modules/core"
-	"github.com/ergongate/nginxconfig/config/nginx"
+	"github.com/ergongate/vince/config/internal/modules/core"
+	"github.com/ergongate/vince/config/nginx"
 )
 
 // Load traverse directive d and constucts a base configuration.
