@@ -3,6 +3,7 @@ package engine
 import (
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"os"
 	"os/exec"
@@ -17,6 +18,8 @@ const (
 	// ChildProcess environment vairble used to signal that the process is a child
 	// process.
 	ChildProcess = "VINCE_CHILD_PROCESS"
+	// PIDFile is the default name for the nginx pid file.
+	PIDFile = "vince.pid"
 )
 
 // IsChild returns true if the binary was invoked as a worker/child process
@@ -34,6 +37,7 @@ func (e errorList) Error() string {
 type Process struct {
 	main       bool
 	pid        int
+	pidFile    string
 	ppid       int
 	env        []string
 	binary     string
@@ -44,10 +48,11 @@ type Process struct {
 
 func New() *Process {
 	return &Process{
-		main:   !IsChild(),
-		pid:    os.Getpid(),
-		ppid:   os.Getppid(),
-		binary: os.Args[0],
+		main:    !IsChild(),
+		pid:     os.Getpid(),
+		pidFile: PIDFile,
+		ppid:    os.Getppid(),
+		binary:  os.Args[0],
 	}
 }
 
@@ -111,6 +116,9 @@ func (p *Process) Info() {
 // control signals.
 func (p *Process) Run() error {
 	p.Info()
+	if err := p.WritePID(); err != nil {
+		return err
+	}
 	if err := p.StartChildren(); err != nil {
 		return err
 	}
@@ -145,6 +153,23 @@ func (p *Process) Run() error {
 		}
 		return p.Close()
 	}
+}
+
+// WritePID creates apid file if this is a main process. If there is already a
+// pid file then it it will be renamed with .old extension and then overwritten
+// with the new value.
+func (p *Process) WritePID() error {
+	if !p.main {
+		return nil
+	}
+	pid := strconv.FormatInt(int64(p.pid), 10)
+	if _, err := os.Stat(p.pidFile); err == nil {
+		err = os.Rename(p.pidFile, p.pidFile+".old")
+		if err != nil {
+			return err
+		}
+	}
+	return ioutil.WriteFile(p.pidFile, []byte(pid), 0600)
 }
 
 // Close sends kill signal to all child process and exits
