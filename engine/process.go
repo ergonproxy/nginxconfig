@@ -188,6 +188,8 @@ func (p *Process) Close() error {
 	return e
 }
 
+// Run
 func Run() error {
+	runFlags()
 	return New().Run()
 }
