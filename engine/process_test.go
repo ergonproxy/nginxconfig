@@ -20,16 +20,6 @@ func TestEncodefile(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer f.Close()
-	env := fileToEnv(f)
-	f2, err := envToFile(env)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer f2.Close()
-	if f2.Fd() != f.Fd() {
-		t.Errorf("expected %d got %d", f.Fd(), f2.Fd())
-	}
-	if f.Name() != f2.Name() {
-		t.Errorf("expected %s got %s", f.Name(), f2.Name())
-	}
+	t.Error(tcp.Addr())
+	t.Error(f.Name())
 }
