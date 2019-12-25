@@ -183,9 +183,11 @@ type Server struct {
 	UnderscoreInHeaders bool        `nginx:"underscores_in_headers"`
 }
 
+type ServerFilterFunc func(*Server) bool
+
 type ServerList []*Server
 
-func (s ServerList) Filter(f func(*Server) bool) ServerList {
+func (s ServerList) Filter(f ServerFilterFunc) ServerList {
 	var ls ServerList
 	for _, v := range s {
 		if f(v) {
@@ -240,6 +242,7 @@ type Listen struct {
 	IPv6Only      bool
 	ReusePort     bool
 	SoKeepalive   string
+	Default       bool
 }
 
 type ConnType uint

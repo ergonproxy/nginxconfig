@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+
+	"github.com/ergongate/vince/config/nginx"
 )
 
 // Matcher selsects a handler to use from request.
@@ -130,4 +132,45 @@ func ServerNameMacthes(names ...string) StringMatchFn {
 		}
 		return false
 	}
+}
+
+func filterDefault(s *nginx.Server) bool {
+	return s.Listen.Default
+}
+
+func filterServerName(name string) nginx.ServerFilterFunc {
+	return func(s *nginx.Server) bool {
+		return ServerNameMacthes(s.ServerName...)(name)
+	}
+}
+
+// selectServer given a host and a list of servers that shares the same
+// listening path this function returns a matching server based on an algorithm
+// described in nginx docs.
+func selectServer(ls nginx.ServerList, host string) *nginx.Server {
+	// we first try to see if we got a match for host name, against all server
+	// names. This account all server name formats supported by nginx such as
+	// exact match, regexp, all etc
+	s := ls.Filter(filterServerName(host))
+	if len(s) == 1 {
+		// We have exactly one match for this so we take it.
+		return s[0]
+	}
+	if len(s) > 1 {
+		// This is unusual but when we got multiple hits we pick the default one. Now
+		// by default we are supposed to just pick the first entry. However if there
+		// is a default_server parameter set on listen directive then we will go ahead
+		// and pick the first one.
+		s = s.Filter(filterDefault)
+		if len(s) > 0 {
+			return s[0]
+		}
+		return nil
+	}
+	// fallback to choosing the default server.
+	s = ls.Filter(filterDefault)
+	if len(s) > 0 {
+		return s[0]
+	}
+	return nil
 }
