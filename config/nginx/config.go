@@ -72,13 +72,13 @@ type ErrorLog struct {
 
 type HTTP struct {
 	SharedHTTP
-	RequestPoolSize          int       `nginx:"request_pool_size"`
-	Server                   []*Server `nginx:"server"`
-	ServerNameHashBucketSize int       `nginx:"server_names_hash_bucket_size"`
-	ServerNameHashMaxSize    int       `nginx:"server_names_hash_max_size"`
-	UnderscoreInHeaders      bool      `nginx:"underscores_in_headers"`
-	VariablesHashBucketSize  int       `nginx:"variables_hash_bucket_size"`
-	VariablesHashMaxSize     int       `nginx:"variables_hash_max_size"`
+	RequestPoolSize          int        `nginx:"request_pool_size"`
+	Server                   ServerList `nginx:"server"`
+	ServerNameHashBucketSize int        `nginx:"server_names_hash_bucket_size"`
+	ServerNameHashMaxSize    int        `nginx:"server_names_hash_max_size"`
+	UnderscoreInHeaders      bool       `nginx:"underscores_in_headers"`
+	VariablesHashBucketSize  int        `nginx:"variables_hash_bucket_size"`
+	VariablesHashMaxSize     int        `nginx:"variables_hash_max_size"`
 }
 
 type SharedHTTP struct {
@@ -181,6 +181,18 @@ type Server struct {
 	ServerName          []string    `nginx:"server_name"`
 	TryFiles            []string    `nginx:"try_files"`
 	UnderscoreInHeaders bool        `nginx:"underscores_in_headers"`
+}
+
+type ServerList []*Server
+
+func (s ServerList) Filter(f func(*Server) bool) ServerList {
+	var ls ServerList
+	for _, v := range s {
+		if f(v) {
+			ls = append(ls, v)
+		}
+	}
+	return ls
 }
 
 type Location struct {
