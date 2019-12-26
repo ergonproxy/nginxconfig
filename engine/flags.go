@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/ergongate/vince/version"
+	"go.uber.org/zap"
 )
 
 var VersionFlag = flag.Bool("v", false, "show version and exit")
@@ -42,32 +44,32 @@ func ConfigDir() (string, error) {
 	return dir, nil
 }
 
-func showVersion() {
+func showVersion(ctx context.Context) {
 	if *VersionFlag {
 		fmt.Println(version.Version)
 		os.Exit(0)
 	}
 }
 
-func showVersionAndConfig() {
+func showVersionAndConfig(ctx context.Context) {
 	if *VersionAndConfigFlag {
 		fmt.Println(version.Version)
 		os.Exit(0)
 	}
 }
 
-func testConfiguration() {
+func testConfiguration(ctx context.Context) {
 	if *TestFlag {
-		err := testConfig()
+		err := testConfig(ctx)
 		if err != nil {
-			fmt.Println(err)
+			log(ctx).Error("Failed testing configuration", zap.Error(err))
 			os.Exit(1)
 		}
 		os.Exit(0)
 	}
 }
 
-func testConfig() error {
+func testConfig(ctx context.Context) error {
 	dir, err := ConfigDir()
 	if err != nil {
 		return err
@@ -83,11 +85,11 @@ func testConfig() error {
 	return nil
 }
 
-func testAndDump() {
+func testAndDump(ctx context.Context) {
 	if *TestDump {
-		err := testConfig()
+		err := testConfig(ctx)
 		if err != nil {
-			fmt.Println(err)
+			log(ctx).Error("Failed testing configuration", zap.Error(err))
 			os.Exit(1)
 		}
 		//TODO dump configurations
@@ -95,9 +97,9 @@ func testAndDump() {
 	}
 }
 
-func runFlags() {
-	showVersion()
-	showVersionAndConfig()
-	testConfiguration()
-	testAndDump()
+func runFlags(ctx context.Context) {
+	showVersion(ctx)
+	showVersionAndConfig(ctx)
+	testConfiguration(ctx)
+	testAndDump(ctx)
 }

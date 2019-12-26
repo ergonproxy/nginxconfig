@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"go.uber.org/zap"
 	"io/ioutil"
 	"net"
 	"os"
@@ -177,9 +178,9 @@ func (p *Process) Info() {
 
 // Run starts children process if this is the main process and listens for
 // control signals.
-func (p *Process) Run() (err error) {
+func (p *Process) Run(ctx context.Context) (err error) {
 	defer func() {
-		err = p.releaseResources()
+		err = p.releaseResources(ctx)
 	}()
 	p.Info()
 	if err := p.WritePID(); err != nil {
@@ -238,10 +239,10 @@ func (p *Process) Run() (err error) {
 		switch sig {
 		case syscall.SIGTERM, syscall.SIGINT:
 			fmt.Println("fast shutdown")
-			return p.FastClose()
+			return p.FastClose(ctx)
 		case syscall.SIGQUIT:
 			fmt.Println("graceful shutdown")
-			return p.Graceful()
+			return p.Graceful(ctx)
 		case syscall.SIGHUP:
 			fmt.Println("reload configuration")
 		case syscall.SIGUSR1:
@@ -263,7 +264,7 @@ func (p *Process) Run() (err error) {
 				}
 				// we are not exiting this loop since the main process remains operational.
 			} else {
-				return p.Graceful()
+				return p.Graceful(ctx)
 			}
 		default:
 			fmt.Println("received unknown signal ", sig.String())
@@ -289,7 +290,7 @@ func (p *Process) WritePID() error {
 }
 
 // Close sends kill signal to all child process and exits
-func (p *Process) Close() error {
+func (p *Process) Close(ctx context.Context) error {
 	if p.closed {
 		return nil
 	}
@@ -301,13 +302,13 @@ func (p *Process) Close() error {
 			}
 		}
 	}
-	if err := p.releaseResources(); err != nil {
+	if err := p.releaseResources(ctx); err != nil {
 		e = append(e, err.Error())
 	}
 	return e
 }
 
-func (p *Process) FastClose() error {
+func (p *Process) FastClose(ctx context.Context) error {
 	if p.closed {
 		return nil
 	}
@@ -319,18 +320,17 @@ func (p *Process) FastClose() error {
 			}
 		}
 	}
-	if err := p.releaseResources(); err != nil {
+	if err := p.releaseResources(ctx); err != nil {
 		e = append(e, err.Error())
 	}
 	return e
 }
 
-func (p *Process) Graceful() error {
-	ctx := context.Background()
+func (p *Process) Graceful(ctx context.Context) error {
 	if p.main {
 		// There is nothing that is served from this main process appart from cache
 		// and configuration.
-		return p.Close()
+		return p.Close(ctx)
 	}
 	var e errorList
 	for _, s := range p.servers {
@@ -338,25 +338,37 @@ func (p *Process) Graceful() error {
 			e = append(e, err.Error())
 		}
 	}
-	if err := p.releaseResources(); err != nil {
+	if err := p.releaseResources(ctx); err != nil {
 		e = append(e, err.Error())
 	}
 	return e
 }
 
-func (p *Process) releaseResources() error {
+func (p *Process) releaseResources(ctx context.Context) error {
 	if p.closed {
 		return nil
 	}
 	var e errorList
-
+	lg := log(ctx)
+	lg.Debug("Releasing sockets",
+		zap.Int("pid", p.pid),
+		zap.Int("ppid", p.ppid),
+		zap.Int("sockets", len(p.sockets)),
+	)
 	for _, ls := range p.sockets {
 		if err := ls.Close(); err != nil {
+			lg.Error("Failed to close socket", zap.Error(err))
 			e = append(e, err.Error())
 		}
 	}
+	lg.Debug("Releasing socket files",
+		zap.Int("pid", p.pid),
+		zap.Int("ppid", p.ppid),
+		zap.Int("sockets", len(p.socketFiles)),
+	)
 	for _, ls := range p.socketFiles {
 		if err := ls.Close(); err != nil {
+			lg.Error("Failed to close socket file", zap.Error(err))
 			e = append(e, err.Error())
 		}
 	}
@@ -364,8 +376,16 @@ func (p *Process) releaseResources() error {
 	return e
 }
 
-// Run
+// Run runs vince
 func Run() error {
-	runFlags()
-	return New().Run()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	lg, err := newLogger()
+	if err != nil {
+		return err
+	}
+	defer lg.Sync()
+	ctx = withLog(ctx, lg)
+	runFlags(ctx)
+	return New().Run(ctx)
 }
