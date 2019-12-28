@@ -1,20 +1,16 @@
 package engine
 
-import "github.com/ergongate/vince/config/nginx"
+import (
+	"context"
+	"net"
+	"net/http"
+	"strconv"
+	"strings"
 
-import "net/http"
-
-import "net"
-
-import "context"
-
-import "github.com/ergongate/vince/version"
-
-import "go.uber.org/zap"
-
-import "strings"
-
-import "strconv"
+	"github.com/ergongate/vince/config/nginx"
+	"github.com/ergongate/vince/version"
+	"go.uber.org/zap"
+)
 
 type Nginx struct {
 	Handler http.Handler
