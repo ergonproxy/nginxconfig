@@ -32,18 +32,48 @@ type Token struct {
 	End   Position
 }
 
+type TokenList []*Token
+
+func (s TokenList) Iter(f func(int, *Token) bool) {
+	for i, v := range s {
+		if !f(i, v) {
+			return
+		}
+	}
+}
+
 type Directive struct {
 	Parent     *Directive `json:"-"`
 	Name       string
 	Start, End Position
-	Params     []Token
+	Params     TokenList
 	Body       *List
 	Comments   []Token
 }
 
 type List struct {
 	Start, End Position
-	Blocks     []*Directive
+	Blocks     DirectiveList
+}
+
+type DirectiveList []*Directive
+
+func (s DirectiveList) Filter(f func(*Directive) bool) DirectiveList {
+	var ls DirectiveList
+	for _, v := range s {
+		if f(v) {
+			ls = append(ls, v)
+		}
+	}
+	return ls
+}
+
+func (s DirectiveList) Iter(f func(*Directive) bool) {
+	for _, v := range s {
+		if !f(v) {
+			return
+		}
+	}
 }
 
 type ErrorList struct {

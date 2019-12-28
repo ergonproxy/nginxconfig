@@ -23,3 +23,7 @@ func TestEncodefile(t *testing.T) {
 	t.Error(tcp.Addr())
 	t.Error(f.Name())
 }
+
+func TestSplit(t *testing.T) {
+	t.Error(net.SplitHostPort("*:80"))
+}

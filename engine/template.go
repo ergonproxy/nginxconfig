@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"html/template"
 	"regexp"
 	"sync"
 )
@@ -29,3 +30,14 @@ func VariablesToTemplates(src []byte) []byte {
 		return []byte("{{." + n + "}}")
 	})
 }
+
+const specialError = `
+<html>
+	<head>{{.code}} {{.text}}</head>
+	<body>
+		<center><h1>{{.code}} {{.text}}</h1></center>
+		<hr><center>{{.server_version}}</center>
+	</body>
+</html`
+
+var httpErrorTemplate = template.Must(template.New("error").Parse(specialError))
