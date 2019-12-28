@@ -26,3 +26,7 @@ func Load(filename string, src io.Reader) (*nginx.Base, error) {
 	}
 	return base.Load(lx)
 }
+
+func LoadDirective(filname string, src io.Reader) (*nginx.Directive, error) {
+	return lex.File(filname, src)
+}

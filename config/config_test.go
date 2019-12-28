@@ -30,7 +30,7 @@ func pass(t *testing.T, filename string) {
 		return
 	}
 	defer f.Close()
-	c, err := Load(filename, f)
+	c, err := LoadDirective(filename, f)
 	if err != nil {
 		t.Error(err)
 		return

@@ -1,0 +1,2012 @@
+{
+  "Name": "main",
+  "Start": {
+    "Filename": "",
+    "Offset": 0,
+    "Line": 0,
+    "Column": 0
+  },
+  "End": {
+    "Filename": "",
+    "Offset": 0,
+    "Line": 0,
+    "Column": 0
+  },
+  "Params": null,
+  "Body": {
+    "Start": {
+      "Filename": "./fixture/nginx.conf",
+      "Offset": 0,
+      "Line": 1,
+      "Column": 1
+    },
+    "End": {
+      "Filename": "./fixture/nginx.conf",
+      "Offset": 1834,
+      "Line": 71,
+      "Column": 1
+    },
+    "Blocks": [
+      {
+        "Name": "user",
+        "Start": {
+          "Filename": "./fixture/nginx.conf",
+          "Offset": 0,
+          "Line": 1,
+          "Column": 1
+        },
+        "End": {
+          "Filename": "./fixture/nginx.conf",
+          "Offset": 19,
+          "Line": 1,
+          "Column": 20
+        },
+        "Params": [
+          {
+            "Text": "www",
+            "Start": {
+              "Filename": "./fixture/nginx.conf",
+              "Offset": 11,
+              "Line": 1,
+              "Column": 12
+            },
+            "End": {
+              "Filename": "./fixture/nginx.conf",
+              "Offset": 14,
+              "Line": 1,
+              "Column": 15
+            }
+          },
+          {
+            "Text": "www",
+            "Start": {
+              "Filename": "./fixture/nginx.conf",
+              "Offset": 15,
+              "Line": 1,
+              "Column": 16
+            },
+            "End": {
+              "Filename": "./fixture/nginx.conf",
+              "Offset": 18,
+              "Line": 1,
+              "Column": 19
+            }
+          }
+        ],
+        "Body": null,
+        "Comments": null
+      },
+      {
+        "Name": "## Default: nobody",
+        "Start": {
+          "Filename": "./fixture/nginx.conf",
+          "Offset": 21,
+          "Line": 1,
+          "Column": 22
+        },
+        "End": {
+          "Filename": "./fixture/nginx.conf",
+          "Offset": 60,
+          "Line": 2,
+          "Column": 21
+        },
+        "Params": [
+          {
+            "Text": "worker_processes",
+            "Start": {
+              "Filename": "./fixture/nginx.conf",
+              "Offset": 40,
+              "Line": 2,
+              "Column": 1
+            },
+            "End": {
+              "Filename": "./fixture/nginx.conf",
+              "Offset": 56,
+              "Line": 2,
+              "Column": 17
+            }
+          },
+          {
+            "Text": "5",
+            "Start": {
+              "Filename": "./fixture/nginx.conf",
+              "Offset": 58,
+              "Line": 2,
+              "Column": 19
+            },
+            "End": {
+              "Filename": "./fixture/nginx.conf",
+              "Offset": 59,
+              "Line": 2,
+              "Column": 20
+            }
+          }
+        ],
+        "Body": null,
+        "Comments": null
+      },
+      {
+        "Name": "## Default: 1",
+        "Start": {
+          "Filename": "./fixture/nginx.conf",
+          "Offset": 62,
+          "Line": 2,
+          "Column": 23
+        },
+        "End": {
+          "Filename": "./fixture/nginx.conf",
+          "Offset": 102,
+          "Line": 3,
+          "Column": 27
+        },
+        "Params": [
+          {
+            "Text": "error_log",
+            "Start": {
+              "Filename": "./fixture/nginx.conf",
+              "Offset": 76,
+              "Line": 3,
+              "Column": 1
+            },
+            "End": {
+              "Filename": "./fixture/nginx.conf",
+              "Offset": 85,
+              "Line": 3,
+              "Column": 10
+            }
+          },
+          {
+            "Text": "logs/error.log",
+            "Start": {
+              "Filename": "./fixture/nginx.conf",
+              "Offset": 87,
+              "Line": 3,
+              "Column": 12
+            },
+            "End": {
+              "Filename": "./fixture/nginx.conf",
+              "Offset": 101,
+              "Line": 3,
+              "Column": 26
+            }
+          }
+        ],
+        "Body": null,
+        "Comments": null
+      },
+      {
+        "Name": "pid",
+        "Start": {
+          "Filename": "./fixture/nginx.conf",
+          "Offset": 103,
+          "Line": 4,
+          "Column": 1
+        },
+        "End": {
+          "Filename": "./fixture/nginx.conf",
+          "Offset": 129,
+          "Line": 4,
+          "Column": 27
+        },
+        "Params": [
+          {
+            "Text": "logs/nginx.pid",
+            "Start": {
+              "Filename": "./fixture/nginx.conf",
+              "Offset": 114,
+              "Line": 4,
+              "Column": 12
+            },
+            "End": {
+              "Filename": "./fixture/nginx.conf",
+              "Offset": 128,
+              "Line": 4,
+              "Column": 26
+            }
+          }
+        ],
+        "Body": null,
+        "Comments": null
+      },
+      {
+        "Name": "worker_rlimit_nofile",
+        "Start": {
+          "Filename": "./fixture/nginx.conf",
+          "Offset": 130,
+          "Line": 5,
+          "Column": 1
+        },
+        "End": {
+          "Filename": "./fixture/nginx.conf",
+          "Offset": 156,
+          "Line": 5,
+          "Column": 27
+        },
+        "Params": [
+          {
+            "Text": "8192",
+            "Start": {
+              "Filename": "./fixture/nginx.conf",
+              "Offset": 151,
+              "Line": 5,
+              "Column": 22
+            },
+            "End": {
+              "Filename": "./fixture/nginx.conf",
+              "Offset": 155,
+              "Line": 5,
+              "Column": 26
+            }
+          }
+        ],
+        "Body": null,
+        "Comments": null
+      },
+      {
+        "Name": "events",
+        "Start": {
+          "Filename": "./fixture/nginx.conf",
+          "Offset": 158,
+          "Line": 7,
+          "Column": 1
+        },
+        "End": {
+          "Filename": "",
+          "Offset": 0,
+          "Line": 0,
+          "Column": 0
+        },
+        "Params": null,
+        "Body": {
+          "Start": {
+            "Filename": "./fixture/nginx.conf",
+            "Offset": 165,
+            "Line": 7,
+            "Column": 8
+          },
+          "End": {
+            "Filename": "./fixture/nginx.conf",
+            "Offset": 1834,
+            "Line": 71,
+            "Column": 1
+          },
+          "Blocks": [
+            {
+              "Name": "worker_connections",
+              "Start": {
+                "Filename": "./fixture/nginx.conf",
+                "Offset": 169,
+                "Line": 8,
+                "Column": 3
+              },
+              "End": {
+                "Filename": "./fixture/nginx.conf",
+                "Offset": 194,
+                "Line": 8,
+                "Column": 28
+              },
+              "Params": [
+                {
+                  "Text": "4096",
+                  "Start": {
+                    "Filename": "./fixture/nginx.conf",
+                    "Offset": 189,
+                    "Line": 8,
+                    "Column": 23
+                  },
+                  "End": {
+                    "Filename": "./fixture/nginx.conf",
+                    "Offset": 193,
+                    "Line": 8,
+                    "Column": 27
+                  }
+                }
+              ],
+              "Body": null,
+              "Comments": null
+            },
+            {
+              "Name": "## Default: 1024",
+              "Start": {
+                "Filename": "./fixture/nginx.conf",
+                "Offset": 196,
+                "Line": 8,
+                "Column": 30
+              },
+              "End": {
+                "Filename": "",
+                "Offset": 0,
+                "Line": 0,
+                "Column": 0
+              },
+              "Params": null,
+              "Body": null,
+              "Comments": null
+            },
+            {
+              "Name": "http",
+              "Start": {
+                "Filename": "./fixture/nginx.conf",
+                "Offset": 216,
+                "Line": 11,
+                "Column": 1
+              },
+              "End": {
+                "Filename": "",
+                "Offset": 0,
+                "Line": 0,
+                "Column": 0
+              },
+              "Params": null,
+              "Body": {
+                "Start": {
+                  "Filename": "./fixture/nginx.conf",
+                  "Offset": 221,
+                  "Line": 11,
+                  "Column": 6
+                },
+                "End": {
+                  "Filename": "./fixture/nginx.conf",
+                  "Offset": 1833,
+                  "Line": 70,
+                  "Column": 2
+                },
+                "Blocks": [
+                  {
+                    "Name": "include",
+                    "Start": {
+                      "Filename": "./fixture/nginx.conf",
+                      "Offset": 225,
+                      "Line": 12,
+                      "Column": 3
+                    },
+                    "End": {
+                      "Filename": "./fixture/nginx.conf",
+                      "Offset": 252,
+                      "Line": 12,
+                      "Column": 30
+                    },
+                    "Params": [
+                      {
+                        "Text": "conf/mime.types",
+                        "Start": {
+                          "Filename": "./fixture/nginx.conf",
+                          "Offset": 236,
+                          "Line": 12,
+                          "Column": 14
+                        },
+                        "End": {
+                          "Filename": "./fixture/nginx.conf",
+                          "Offset": 251,
+                          "Line": 12,
+                          "Column": 29
+                        }
+                      }
+                    ],
+                    "Body": null,
+                    "Comments": null
+                  },
+                  {
+                    "Name": "include",
+                    "Start": {
+                      "Filename": "./fixture/nginx.conf",
+                      "Offset": 255,
+                      "Line": 13,
+                      "Column": 3
+                    },
+                    "End": {
+                      "Filename": "./fixture/nginx.conf",
+                      "Offset": 288,
+                      "Line": 13,
+                      "Column": 36
+                    },
+                    "Params": [
+                      {
+                        "Text": "/etc/nginx/proxy.conf",
+                        "Start": {
+                          "Filename": "./fixture/nginx.conf",
+                          "Offset": 266,
+                          "Line": 13,
+                          "Column": 14
+                        },
+                        "End": {
+                          "Filename": "./fixture/nginx.conf",
+                          "Offset": 287,
+                          "Line": 13,
+                          "Column": 35
+                        }
+                      }
+                    ],
+                    "Body": null,
+                    "Comments": null
+                  },
+                  {
+                    "Name": "include",
+                    "Start": {
+                      "Filename": "./fixture/nginx.conf",
+                      "Offset": 291,
+                      "Line": 14,
+                      "Column": 3
+                    },
+                    "End": {
+                      "Filename": "./fixture/nginx.conf",
+                      "Offset": 326,
+                      "Line": 14,
+                      "Column": 38
+                    },
+                    "Params": [
+                      {
+                        "Text": "/etc/nginx/fastcgi.conf",
+                        "Start": {
+                          "Filename": "./fixture/nginx.conf",
+                          "Offset": 302,
+                          "Line": 14,
+                          "Column": 14
+                        },
+                        "End": {
+                          "Filename": "./fixture/nginx.conf",
+                          "Offset": 325,
+                          "Line": 14,
+                          "Column": 37
+                        }
+                      }
+                    ],
+                    "Body": null,
+                    "Comments": null
+                  },
+                  {
+                    "Name": "index",
+                    "Start": {
+                      "Filename": "./fixture/nginx.conf",
+                      "Offset": 329,
+                      "Line": 15,
+                      "Column": 3
+                    },
+                    "End": {
+                      "Filename": "./fixture/nginx.conf",
+                      "Offset": 369,
+                      "Line": 15,
+                      "Column": 43
+                    },
+                    "Params": [
+                      {
+                        "Text": "index.html",
+                        "Start": {
+                          "Filename": "./fixture/nginx.conf",
+                          "Offset": 338,
+                          "Line": 15,
+                          "Column": 12
+                        },
+                        "End": {
+                          "Filename": "./fixture/nginx.conf",
+                          "Offset": 348,
+                          "Line": 15,
+                          "Column": 22
+                        }
+                      },
+                      {
+                        "Text": "index.htm",
+                        "Start": {
+                          "Filename": "./fixture/nginx.conf",
+                          "Offset": 349,
+                          "Line": 15,
+                          "Column": 23
+                        },
+                        "End": {
+                          "Filename": "./fixture/nginx.conf",
+                          "Offset": 358,
+                          "Line": 15,
+                          "Column": 32
+                        }
+                      },
+                      {
+                        "Text": "index.php",
+                        "Start": {
+                          "Filename": "./fixture/nginx.conf",
+                          "Offset": 359,
+                          "Line": 15,
+                          "Column": 33
+                        },
+                        "End": {
+                          "Filename": "./fixture/nginx.conf",
+                          "Offset": 368,
+                          "Line": 15,
+                          "Column": 42
+                        }
+                      }
+                    ],
+                    "Body": null,
+                    "Comments": null
+                  },
+                  {
+                    "Name": "default_type",
+                    "Start": {
+                      "Filename": "./fixture/nginx.conf",
+                      "Offset": 373,
+                      "Line": 17,
+                      "Column": 3
+                    },
+                    "End": {
+                      "Filename": "./fixture/nginx.conf",
+                      "Offset": 411,
+                      "Line": 17,
+                      "Column": 41
+                    },
+                    "Params": [
+                      {
+                        "Text": "application/octet-stream",
+                        "Start": {
+                          "Filename": "./fixture/nginx.conf",
+                          "Offset": 386,
+                          "Line": 17,
+                          "Column": 16
+                        },
+                        "End": {
+                          "Filename": "./fixture/nginx.conf",
+                          "Offset": 410,
+                          "Line": 17,
+                          "Column": 40
+                        }
+                      }
+                    ],
+                    "Body": null,
+                    "Comments": null
+                  },
+                  {
+                    "Name": "log_format",
+                    "Start": {
+                      "Filename": "./fixture/nginx.conf",
+                      "Offset": 414,
+                      "Line": 18,
+                      "Column": 3
+                    },
+                    "End": {
+                      "Filename": "./fixture/nginx.conf",
+                      "Offset": 586,
+                      "Line": 20,
+                      "Column": 50
+                    },
+                    "Params": [
+                      {
+                        "Text": "main",
+                        "Start": {
+                          "Filename": "./fixture/nginx.conf",
+                          "Offset": 427,
+                          "Line": 18,
+                          "Column": 16
+                        },
+                        "End": {
+                          "Filename": "./fixture/nginx.conf",
+                          "Offset": 431,
+                          "Line": 18,
+                          "Column": 20
+                        }
+                      },
+                      {
+                        "Text": "'$remote_addr - $remote_user [$time_local]  $status '",
+                        "Start": {
+                          "Filename": "./fixture/nginx.conf",
+                          "Offset": 432,
+                          "Line": 18,
+                          "Column": 21
+                        },
+                        "End": {
+                          "Filename": "./fixture/nginx.conf",
+                          "Offset": 485,
+                          "Line": 18,
+                          "Column": 74
+                        }
+                      },
+                      {
+                        "Text": "'\"$request\" $body_bytes_sent \"$http_referer\" '",
+                        "Start": {
+                          "Filename": "./fixture/nginx.conf",
+                          "Offset": 490,
+                          "Line": 19,
+                          "Column": 5
+                        },
+                        "End": {
+                          "Filename": "./fixture/nginx.conf",
+                          "Offset": 536,
+                          "Line": 19,
+                          "Column": 51
+                        }
+                      },
+                      {
+                        "Text": "'\"$http_user_agent\" \"$http_x_forwarded_for\"'",
+                        "Start": {
+                          "Filename": "./fixture/nginx.conf",
+                          "Offset": 541,
+                          "Line": 20,
+                          "Column": 5
+                        },
+                        "End": {
+                          "Filename": "./fixture/nginx.conf",
+                          "Offset": 585,
+                          "Line": 20,
+                          "Column": 49
+                        }
+                      }
+                    ],
+                    "Body": null,
+                    "Comments": null
+                  },
+                  {
+                    "Name": "access_log",
+                    "Start": {
+                      "Filename": "./fixture/nginx.conf",
+                      "Offset": 589,
+                      "Line": 21,
+                      "Column": 3
+                    },
+                    "End": {
+                      "Filename": "./fixture/nginx.conf",
+                      "Offset": 624,
+                      "Line": 21,
+                      "Column": 38
+                    },
+                    "Params": [
+                      {
+                        "Text": "logs/access.log",
+                        "Start": {
+                          "Filename": "./fixture/nginx.conf",
+                          "Offset": 602,
+                          "Line": 21,
+                          "Column": 16
+                        },
+                        "End": {
+                          "Filename": "./fixture/nginx.conf",
+                          "Offset": 617,
+                          "Line": 21,
+                          "Column": 31
+                        }
+                      },
+                      {
+                        "Text": "main",
+                        "Start": {
+                          "Filename": "./fixture/nginx.conf",
+                          "Offset": 619,
+                          "Line": 21,
+                          "Column": 33
+                        },
+                        "End": {
+                          "Filename": "./fixture/nginx.conf",
+                          "Offset": 623,
+                          "Line": 21,
+                          "Column": 37
+                        }
+                      }
+                    ],
+                    "Body": null,
+                    "Comments": null
+                  },
+                  {
+                    "Name": "sendfile",
+                    "Start": {
+                      "Filename": "./fixture/nginx.conf",
+                      "Offset": 627,
+                      "Line": 22,
+                      "Column": 3
+                    },
+                    "End": {
+                      "Filename": "./fixture/nginx.conf",
+                      "Offset": 643,
+                      "Line": 22,
+                      "Column": 19
+                    },
+                    "Params": [
+                      {
+                        "Text": "on",
+                        "Start": {
+                          "Filename": "./fixture/nginx.conf",
+                          "Offset": 640,
+                          "Line": 22,
+                          "Column": 16
+                        },
+                        "End": {
+                          "Filename": "./fixture/nginx.conf",
+                          "Offset": 642,
+                          "Line": 22,
+                          "Column": 18
+                        }
+                      }
+                    ],
+                    "Body": null,
+                    "Comments": null
+                  },
+                  {
+                    "Name": "tcp_nopush",
+                    "Start": {
+                      "Filename": "./fixture/nginx.conf",
+                      "Offset": 646,
+                      "Line": 23,
+                      "Column": 3
+                    },
+                    "End": {
+                      "Filename": "./fixture/nginx.conf",
+                      "Offset": 662,
+                      "Line": 23,
+                      "Column": 19
+                    },
+                    "Params": [
+                      {
+                        "Text": "on",
+                        "Start": {
+                          "Filename": "./fixture/nginx.conf",
+                          "Offset": 659,
+                          "Line": 23,
+                          "Column": 16
+                        },
+                        "End": {
+                          "Filename": "./fixture/nginx.conf",
+                          "Offset": 661,
+                          "Line": 23,
+                          "Column": 18
+                        }
+                      }
+                    ],
+                    "Body": null,
+                    "Comments": null
+                  },
+                  {
+                    "Name": "server_names_hash_bucket_size",
+                    "Start": {
+                      "Filename": "./fixture/nginx.conf",
+                      "Offset": 665,
+                      "Line": 24,
+                      "Column": 3
+                    },
+                    "End": {
+                      "Filename": "./fixture/nginx.conf",
+                      "Offset": 699,
+                      "Line": 24,
+                      "Column": 37
+                    },
+                    "Params": [
+                      {
+                        "Text": "128",
+                        "Start": {
+                          "Filename": "./fixture/nginx.conf",
+                          "Offset": 695,
+                          "Line": 24,
+                          "Column": 33
+                        },
+                        "End": {
+                          "Filename": "./fixture/nginx.conf",
+                          "Offset": 698,
+                          "Line": 24,
+                          "Column": 36
+                        }
+                      }
+                    ],
+                    "Body": null,
+                    "Comments": null
+                  },
+                  {
+                    "Name": "# this seems to be required for some vhosts",
+                    "Start": {
+                      "Filename": "./fixture/nginx.conf",
+                      "Offset": 700,
+                      "Line": 24,
+                      "Column": 38
+                    },
+                    "End": {
+                      "Filename": "",
+                      "Offset": 0,
+                      "Line": 0,
+                      "Column": 0
+                    },
+                    "Params": [
+                      {
+                        "Text": "server",
+                        "Start": {
+                          "Filename": "./fixture/nginx.conf",
+                          "Offset": 747,
+                          "Line": 26,
+                          "Column": 3
+                        },
+                        "End": {
+                          "Filename": "./fixture/nginx.conf",
+                          "Offset": 753,
+                          "Line": 26,
+                          "Column": 9
+                        }
+                      }
+                    ],
+                    "Body": {
+                      "Start": {
+                        "Filename": "./fixture/nginx.conf",
+                        "Offset": 754,
+                        "Line": 26,
+                        "Column": 10
+                      },
+                      "End": {
+                        "Filename": "./fixture/nginx.conf",
+                        "Offset": 979,
+                        "Line": 35,
+                        "Column": 4
+                      },
+                      "Blocks": [
+                        {
+                          "Name": "# php/fastcgi",
+                          "Start": {
+                            "Filename": "./fixture/nginx.conf",
+                            "Offset": 756,
+                            "Line": 26,
+                            "Column": 12
+                          },
+                          "End": {
+                            "Filename": "./fixture/nginx.conf",
+                            "Offset": 790,
+                            "Line": 27,
+                            "Column": 21
+                          },
+                          "Params": [
+                            {
+                              "Text": "listen",
+                              "Start": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 774,
+                                "Line": 27,
+                                "Column": 5
+                              },
+                              "End": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 780,
+                                "Line": 27,
+                                "Column": 11
+                              }
+                            },
+                            {
+                              "Text": "80",
+                              "Start": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 787,
+                                "Line": 27,
+                                "Column": 18
+                              },
+                              "End": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 789,
+                                "Line": 27,
+                                "Column": 20
+                              }
+                            }
+                          ],
+                          "Body": null,
+                          "Comments": null
+                        },
+                        {
+                          "Name": "server_name",
+                          "Start": {
+                            "Filename": "./fixture/nginx.conf",
+                            "Offset": 795,
+                            "Line": 28,
+                            "Column": 5
+                          },
+                          "End": {
+                            "Filename": "./fixture/nginx.conf",
+                            "Offset": 836,
+                            "Line": 28,
+                            "Column": 46
+                          },
+                          "Params": [
+                            {
+                              "Text": "domain1.com",
+                              "Start": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 808,
+                                "Line": 28,
+                                "Column": 18
+                              },
+                              "End": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 819,
+                                "Line": 28,
+                                "Column": 29
+                              }
+                            },
+                            {
+                              "Text": "www.domain1.com",
+                              "Start": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 820,
+                                "Line": 28,
+                                "Column": 30
+                              },
+                              "End": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 835,
+                                "Line": 28,
+                                "Column": 45
+                              }
+                            }
+                          ],
+                          "Body": null,
+                          "Comments": null
+                        },
+                        {
+                          "Name": "access_log",
+                          "Start": {
+                            "Filename": "./fixture/nginx.conf",
+                            "Offset": 841,
+                            "Line": 29,
+                            "Column": 5
+                          },
+                          "End": {
+                            "Filename": "./fixture/nginx.conf",
+                            "Offset": 884,
+                            "Line": 29,
+                            "Column": 48
+                          },
+                          "Params": [
+                            {
+                              "Text": "logs/domain1.access.log",
+                              "Start": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 854,
+                                "Line": 29,
+                                "Column": 18
+                              },
+                              "End": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 877,
+                                "Line": 29,
+                                "Column": 41
+                              }
+                            },
+                            {
+                              "Text": "main",
+                              "Start": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 879,
+                                "Line": 29,
+                                "Column": 43
+                              },
+                              "End": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 883,
+                                "Line": 29,
+                                "Column": 47
+                              }
+                            }
+                          ],
+                          "Body": null,
+                          "Comments": null
+                        },
+                        {
+                          "Name": "root",
+                          "Start": {
+                            "Filename": "./fixture/nginx.conf",
+                            "Offset": 889,
+                            "Line": 30,
+                            "Column": 5
+                          },
+                          "End": {
+                            "Filename": "./fixture/nginx.conf",
+                            "Offset": 907,
+                            "Line": 30,
+                            "Column": 23
+                          },
+                          "Params": [
+                            {
+                              "Text": "html",
+                              "Start": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 902,
+                                "Line": 30,
+                                "Column": 18
+                              },
+                              "End": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 906,
+                                "Line": 30,
+                                "Column": 22
+                              }
+                            }
+                          ],
+                          "Body": null,
+                          "Comments": null
+                        },
+                        {
+                          "Name": "location",
+                          "Start": {
+                            "Filename": "./fixture/nginx.conf",
+                            "Offset": 913,
+                            "Line": 32,
+                            "Column": 5
+                          },
+                          "End": {
+                            "Filename": "./fixture/nginx.conf",
+                            "Offset": 979,
+                            "Line": 35,
+                            "Column": 4
+                          },
+                          "Params": [
+                            {
+                              "Text": "~",
+                              "Start": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 922,
+                                "Line": 32,
+                                "Column": 14
+                              },
+                              "End": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 923,
+                                "Line": 32,
+                                "Column": 15
+                              }
+                            },
+                            {
+                              "Text": "\\.php$",
+                              "Start": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 924,
+                                "Line": 32,
+                                "Column": 16
+                              },
+                              "End": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 930,
+                                "Line": 32,
+                                "Column": 22
+                              }
+                            }
+                          ],
+                          "Body": {
+                            "Start": {
+                              "Filename": "./fixture/nginx.conf",
+                              "Offset": 931,
+                              "Line": 32,
+                              "Column": 23
+                            },
+                            "End": {
+                              "Filename": "./fixture/nginx.conf",
+                              "Offset": 975,
+                              "Line": 34,
+                              "Column": 6
+                            },
+                            "Blocks": [
+                              {
+                                "Name": "fastcgi_pass",
+                                "Start": {
+                                  "Filename": "./fixture/nginx.conf",
+                                  "Offset": 939,
+                                  "Line": 33,
+                                  "Column": 7
+                                },
+                                "End": {
+                                  "Filename": "./fixture/nginx.conf",
+                                  "Offset": 975,
+                                  "Line": 34,
+                                  "Column": 6
+                                },
+                                "Params": [
+                                  {
+                                    "Text": "127.0.0.1:1025",
+                                    "Start": {
+                                      "Filename": "./fixture/nginx.conf",
+                                      "Offset": 954,
+                                      "Line": 33,
+                                      "Column": 22
+                                    },
+                                    "End": {
+                                      "Filename": "./fixture/nginx.conf",
+                                      "Offset": 968,
+                                      "Line": 33,
+                                      "Column": 36
+                                    }
+                                  }
+                                ],
+                                "Body": null,
+                                "Comments": null
+                              }
+                            ]
+                          },
+                          "Comments": null
+                        }
+                      ]
+                    },
+                    "Comments": null
+                  },
+                  {
+                    "Name": "server",
+                    "Start": {
+                      "Filename": "./fixture/nginx.conf",
+                      "Offset": 983,
+                      "Line": 37,
+                      "Column": 3
+                    },
+                    "End": {
+                      "Filename": "",
+                      "Offset": 0,
+                      "Line": 0,
+                      "Column": 0
+                    },
+                    "Params": null,
+                    "Body": {
+                      "Start": {
+                        "Filename": "./fixture/nginx.conf",
+                        "Offset": 990,
+                        "Line": 37,
+                        "Column": 10
+                      },
+                      "End": {
+                        "Filename": "./fixture/nginx.conf",
+                        "Offset": 1446,
+                        "Line": 52,
+                        "Column": 4
+                      },
+                      "Blocks": [
+                        {
+                          "Name": "# simple reverse-proxy",
+                          "Start": {
+                            "Filename": "./fixture/nginx.conf",
+                            "Offset": 992,
+                            "Line": 37,
+                            "Column": 12
+                          },
+                          "End": {
+                            "Filename": "./fixture/nginx.conf",
+                            "Offset": 1035,
+                            "Line": 38,
+                            "Column": 21
+                          },
+                          "Params": [
+                            {
+                              "Text": "listen",
+                              "Start": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 1019,
+                                "Line": 38,
+                                "Column": 5
+                              },
+                              "End": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 1025,
+                                "Line": 38,
+                                "Column": 11
+                              }
+                            },
+                            {
+                              "Text": "80",
+                              "Start": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 1032,
+                                "Line": 38,
+                                "Column": 18
+                              },
+                              "End": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 1034,
+                                "Line": 38,
+                                "Column": 20
+                              }
+                            }
+                          ],
+                          "Body": null,
+                          "Comments": null
+                        },
+                        {
+                          "Name": "server_name",
+                          "Start": {
+                            "Filename": "./fixture/nginx.conf",
+                            "Offset": 1040,
+                            "Line": 39,
+                            "Column": 5
+                          },
+                          "End": {
+                            "Filename": "./fixture/nginx.conf",
+                            "Offset": 1081,
+                            "Line": 39,
+                            "Column": 46
+                          },
+                          "Params": [
+                            {
+                              "Text": "domain2.com",
+                              "Start": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 1053,
+                                "Line": 39,
+                                "Column": 18
+                              },
+                              "End": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 1064,
+                                "Line": 39,
+                                "Column": 29
+                              }
+                            },
+                            {
+                              "Text": "www.domain2.com",
+                              "Start": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 1065,
+                                "Line": 39,
+                                "Column": 30
+                              },
+                              "End": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 1080,
+                                "Line": 39,
+                                "Column": 45
+                              }
+                            }
+                          ],
+                          "Body": null,
+                          "Comments": null
+                        },
+                        {
+                          "Name": "access_log",
+                          "Start": {
+                            "Filename": "./fixture/nginx.conf",
+                            "Offset": 1086,
+                            "Line": 40,
+                            "Column": 5
+                          },
+                          "End": {
+                            "Filename": "./fixture/nginx.conf",
+                            "Offset": 1129,
+                            "Line": 40,
+                            "Column": 48
+                          },
+                          "Params": [
+                            {
+                              "Text": "logs/domain2.access.log",
+                              "Start": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 1099,
+                                "Line": 40,
+                                "Column": 18
+                              },
+                              "End": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 1122,
+                                "Line": 40,
+                                "Column": 41
+                              }
+                            },
+                            {
+                              "Text": "main",
+                              "Start": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 1124,
+                                "Line": 40,
+                                "Column": 43
+                              },
+                              "End": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 1128,
+                                "Line": 40,
+                                "Column": 47
+                              }
+                            }
+                          ],
+                          "Body": null,
+                          "Comments": null
+                        },
+                        {
+                          "Name": "# serve static files",
+                          "Start": {
+                            "Filename": "./fixture/nginx.conf",
+                            "Offset": 1135,
+                            "Line": 42,
+                            "Column": 5
+                          },
+                          "End": {
+                            "Filename": "",
+                            "Offset": 0,
+                            "Line": 0,
+                            "Column": 0
+                          },
+                          "Params": [
+                            {
+                              "Text": "location",
+                              "Start": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 1160,
+                                "Line": 43,
+                                "Column": 5
+                              },
+                              "End": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 1168,
+                                "Line": 43,
+                                "Column": 13
+                              }
+                            },
+                            {
+                              "Text": "~",
+                              "Start": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 1169,
+                                "Line": 43,
+                                "Column": 14
+                              },
+                              "End": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 1170,
+                                "Line": 43,
+                                "Column": 15
+                              }
+                            },
+                            {
+                              "Text": "^/(images|javascript|js|css|flash|media|static)/",
+                              "Start": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 1171,
+                                "Line": 43,
+                                "Column": 16
+                              },
+                              "End": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 1219,
+                                "Line": 43,
+                                "Column": 64
+                              }
+                            }
+                          ],
+                          "Body": {
+                            "Start": {
+                              "Filename": "./fixture/nginx.conf",
+                              "Offset": 1221,
+                              "Line": 43,
+                              "Column": 66
+                            },
+                            "End": {
+                              "Filename": "./fixture/nginx.conf",
+                              "Offset": 1301,
+                              "Line": 46,
+                              "Column": 6
+                            },
+                            "Blocks": [
+                              {
+                                "Name": "root",
+                                "Start": {
+                                  "Filename": "./fixture/nginx.conf",
+                                  "Offset": 1229,
+                                  "Line": 44,
+                                  "Column": 7
+                                },
+                                "End": {
+                                  "Filename": "./fixture/nginx.conf",
+                                  "Offset": 1276,
+                                  "Line": 44,
+                                  "Column": 54
+                                },
+                                "Params": [
+                                  {
+                                    "Text": "/var/www/virtual/big.server.com/htdocs",
+                                    "Start": {
+                                      "Filename": "./fixture/nginx.conf",
+                                      "Offset": 1237,
+                                      "Line": 44,
+                                      "Column": 15
+                                    },
+                                    "End": {
+                                      "Filename": "./fixture/nginx.conf",
+                                      "Offset": 1275,
+                                      "Line": 44,
+                                      "Column": 53
+                                    }
+                                  }
+                                ],
+                                "Body": null,
+                                "Comments": null
+                              },
+                              {
+                                "Name": "expires",
+                                "Start": {
+                                  "Filename": "./fixture/nginx.conf",
+                                  "Offset": 1283,
+                                  "Line": 45,
+                                  "Column": 7
+                                },
+                                "End": {
+                                  "Filename": "./fixture/nginx.conf",
+                                  "Offset": 1301,
+                                  "Line": 46,
+                                  "Column": 6
+                                },
+                                "Params": [
+                                  {
+                                    "Text": "30d",
+                                    "Start": {
+                                      "Filename": "./fixture/nginx.conf",
+                                      "Offset": 1291,
+                                      "Line": 45,
+                                      "Column": 15
+                                    },
+                                    "End": {
+                                      "Filename": "./fixture/nginx.conf",
+                                      "Offset": 1294,
+                                      "Line": 45,
+                                      "Column": 18
+                                    }
+                                  }
+                                ],
+                                "Body": null,
+                                "Comments": null
+                              }
+                            ]
+                          },
+                          "Comments": null
+                        },
+                        {
+                          "Name": "# pass requests for dynamic content to rails/turbogears/zope, et al",
+                          "Start": {
+                            "Filename": "./fixture/nginx.conf",
+                            "Offset": 1307,
+                            "Line": 48,
+                            "Column": 5
+                          },
+                          "End": {
+                            "Filename": "./fixture/nginx.conf",
+                            "Offset": 1446,
+                            "Line": 52,
+                            "Column": 4
+                          },
+                          "Params": [
+                            {
+                              "Text": "location",
+                              "Start": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 1379,
+                                "Line": 49,
+                                "Column": 5
+                              },
+                              "End": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 1387,
+                                "Line": 49,
+                                "Column": 13
+                              }
+                            },
+                            {
+                              "Text": "/",
+                              "Start": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 1388,
+                                "Line": 49,
+                                "Column": 14
+                              },
+                              "End": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 1389,
+                                "Line": 49,
+                                "Column": 15
+                              }
+                            }
+                          ],
+                          "Body": {
+                            "Start": {
+                              "Filename": "./fixture/nginx.conf",
+                              "Offset": 1390,
+                              "Line": 49,
+                              "Column": 16
+                            },
+                            "End": {
+                              "Filename": "./fixture/nginx.conf",
+                              "Offset": 1442,
+                              "Line": 51,
+                              "Column": 6
+                            },
+                            "Blocks": [
+                              {
+                                "Name": "proxy_pass",
+                                "Start": {
+                                  "Filename": "./fixture/nginx.conf",
+                                  "Offset": 1398,
+                                  "Line": 50,
+                                  "Column": 7
+                                },
+                                "End": {
+                                  "Filename": "./fixture/nginx.conf",
+                                  "Offset": 1442,
+                                  "Line": 51,
+                                  "Column": 6
+                                },
+                                "Params": [
+                                  {
+                                    "Text": "http://127.0.0.1:8080",
+                                    "Start": {
+                                      "Filename": "./fixture/nginx.conf",
+                                      "Offset": 1414,
+                                      "Line": 50,
+                                      "Column": 23
+                                    },
+                                    "End": {
+                                      "Filename": "./fixture/nginx.conf",
+                                      "Offset": 1435,
+                                      "Line": 50,
+                                      "Column": 44
+                                    }
+                                  }
+                                ],
+                                "Body": null,
+                                "Comments": null
+                              }
+                            ]
+                          },
+                          "Comments": null
+                        }
+                      ]
+                    },
+                    "Comments": null
+                  },
+                  {
+                    "Name": "upstream",
+                    "Start": {
+                      "Filename": "./fixture/nginx.conf",
+                      "Offset": 1450,
+                      "Line": 54,
+                      "Column": 3
+                    },
+                    "End": {
+                      "Filename": "",
+                      "Offset": 0,
+                      "Line": 0,
+                      "Column": 0
+                    },
+                    "Params": [
+                      {
+                        "Text": "big_server_com",
+                        "Start": {
+                          "Filename": "./fixture/nginx.conf",
+                          "Offset": 1459,
+                          "Line": 54,
+                          "Column": 12
+                        },
+                        "End": {
+                          "Filename": "./fixture/nginx.conf",
+                          "Offset": 1473,
+                          "Line": 54,
+                          "Column": 26
+                        }
+                      }
+                    ],
+                    "Body": {
+                      "Start": {
+                        "Filename": "./fixture/nginx.conf",
+                        "Offset": 1474,
+                        "Line": 54,
+                        "Column": 27
+                      },
+                      "End": {
+                        "Filename": "./fixture/nginx.conf",
+                        "Offset": 1609,
+                        "Line": 59,
+                        "Column": 4
+                      },
+                      "Blocks": [
+                        {
+                          "Name": "server",
+                          "Start": {
+                            "Filename": "./fixture/nginx.conf",
+                            "Offset": 1480,
+                            "Line": 55,
+                            "Column": 5
+                          },
+                          "End": {
+                            "Filename": "./fixture/nginx.conf",
+                            "Offset": 1511,
+                            "Line": 55,
+                            "Column": 36
+                          },
+                          "Params": [
+                            {
+                              "Text": "127.0.0.3:8000",
+                              "Start": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 1487,
+                                "Line": 55,
+                                "Column": 12
+                              },
+                              "End": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 1501,
+                                "Line": 55,
+                                "Column": 26
+                              }
+                            },
+                            {
+                              "Text": "weight=5",
+                              "Start": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 1502,
+                                "Line": 55,
+                                "Column": 27
+                              },
+                              "End": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 1510,
+                                "Line": 55,
+                                "Column": 35
+                              }
+                            }
+                          ],
+                          "Body": null,
+                          "Comments": null
+                        },
+                        {
+                          "Name": "server",
+                          "Start": {
+                            "Filename": "./fixture/nginx.conf",
+                            "Offset": 1516,
+                            "Line": 56,
+                            "Column": 5
+                          },
+                          "End": {
+                            "Filename": "./fixture/nginx.conf",
+                            "Offset": 1547,
+                            "Line": 56,
+                            "Column": 36
+                          },
+                          "Params": [
+                            {
+                              "Text": "127.0.0.3:8001",
+                              "Start": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 1523,
+                                "Line": 56,
+                                "Column": 12
+                              },
+                              "End": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 1537,
+                                "Line": 56,
+                                "Column": 26
+                              }
+                            },
+                            {
+                              "Text": "weight=5",
+                              "Start": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 1538,
+                                "Line": 56,
+                                "Column": 27
+                              },
+                              "End": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 1546,
+                                "Line": 56,
+                                "Column": 35
+                              }
+                            }
+                          ],
+                          "Body": null,
+                          "Comments": null
+                        },
+                        {
+                          "Name": "server",
+                          "Start": {
+                            "Filename": "./fixture/nginx.conf",
+                            "Offset": 1552,
+                            "Line": 57,
+                            "Column": 5
+                          },
+                          "End": {
+                            "Filename": "./fixture/nginx.conf",
+                            "Offset": 1576,
+                            "Line": 57,
+                            "Column": 29
+                          },
+                          "Params": [
+                            {
+                              "Text": "192.168.0.1:8000",
+                              "Start": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 1559,
+                                "Line": 57,
+                                "Column": 12
+                              },
+                              "End": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 1575,
+                                "Line": 57,
+                                "Column": 28
+                              }
+                            }
+                          ],
+                          "Body": null,
+                          "Comments": null
+                        },
+                        {
+                          "Name": "server",
+                          "Start": {
+                            "Filename": "./fixture/nginx.conf",
+                            "Offset": 1581,
+                            "Line": 58,
+                            "Column": 5
+                          },
+                          "End": {
+                            "Filename": "./fixture/nginx.conf",
+                            "Offset": 1609,
+                            "Line": 59,
+                            "Column": 4
+                          },
+                          "Params": [
+                            {
+                              "Text": "192.168.0.1:8001",
+                              "Start": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 1588,
+                                "Line": 58,
+                                "Column": 12
+                              },
+                              "End": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 1604,
+                                "Line": 58,
+                                "Column": 28
+                              }
+                            }
+                          ],
+                          "Body": null,
+                          "Comments": null
+                        }
+                      ]
+                    },
+                    "Comments": null
+                  },
+                  {
+                    "Name": "server",
+                    "Start": {
+                      "Filename": "./fixture/nginx.conf",
+                      "Offset": 1613,
+                      "Line": 61,
+                      "Column": 3
+                    },
+                    "End": {
+                      "Filename": "./fixture/nginx.conf",
+                      "Offset": 1833,
+                      "Line": 70,
+                      "Column": 2
+                    },
+                    "Params": null,
+                    "Body": {
+                      "Start": {
+                        "Filename": "./fixture/nginx.conf",
+                        "Offset": 1620,
+                        "Line": 61,
+                        "Column": 10
+                      },
+                      "End": {
+                        "Filename": "./fixture/nginx.conf",
+                        "Offset": 1831,
+                        "Line": 69,
+                        "Column": 4
+                      },
+                      "Blocks": [
+                        {
+                          "Name": "# simple load balancing",
+                          "Start": {
+                            "Filename": "./fixture/nginx.conf",
+                            "Offset": 1622,
+                            "Line": 61,
+                            "Column": 12
+                          },
+                          "End": {
+                            "Filename": "./fixture/nginx.conf",
+                            "Offset": 1669,
+                            "Line": 62,
+                            "Column": 24
+                          },
+                          "Params": [
+                            {
+                              "Text": "listen",
+                              "Start": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 1650,
+                                "Line": 62,
+                                "Column": 5
+                              },
+                              "End": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 1656,
+                                "Line": 62,
+                                "Column": 11
+                              }
+                            },
+                            {
+                              "Text": "80",
+                              "Start": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 1666,
+                                "Line": 62,
+                                "Column": 21
+                              },
+                              "End": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 1668,
+                                "Line": 62,
+                                "Column": 23
+                              }
+                            }
+                          ],
+                          "Body": null,
+                          "Comments": null
+                        },
+                        {
+                          "Name": "server_name",
+                          "Start": {
+                            "Filename": "./fixture/nginx.conf",
+                            "Offset": 1674,
+                            "Line": 63,
+                            "Column": 5
+                          },
+                          "End": {
+                            "Filename": "./fixture/nginx.conf",
+                            "Offset": 1705,
+                            "Line": 63,
+                            "Column": 36
+                          },
+                          "Params": [
+                            {
+                              "Text": "big.server.com",
+                              "Start": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 1690,
+                                "Line": 63,
+                                "Column": 21
+                              },
+                              "End": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 1704,
+                                "Line": 63,
+                                "Column": 35
+                              }
+                            }
+                          ],
+                          "Body": null,
+                          "Comments": null
+                        },
+                        {
+                          "Name": "access_log",
+                          "Start": {
+                            "Filename": "./fixture/nginx.conf",
+                            "Offset": 1710,
+                            "Line": 64,
+                            "Column": 5
+                          },
+                          "End": {
+                            "Filename": "./fixture/nginx.conf",
+                            "Offset": 1758,
+                            "Line": 64,
+                            "Column": 53
+                          },
+                          "Params": [
+                            {
+                              "Text": "logs/big.server.access.log",
+                              "Start": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 1726,
+                                "Line": 64,
+                                "Column": 21
+                              },
+                              "End": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 1752,
+                                "Line": 64,
+                                "Column": 47
+                              }
+                            },
+                            {
+                              "Text": "main",
+                              "Start": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 1753,
+                                "Line": 64,
+                                "Column": 48
+                              },
+                              "End": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 1757,
+                                "Line": 64,
+                                "Column": 52
+                              }
+                            }
+                          ],
+                          "Body": null,
+                          "Comments": null
+                        },
+                        {
+                          "Name": "location",
+                          "Start": {
+                            "Filename": "./fixture/nginx.conf",
+                            "Offset": 1764,
+                            "Line": 66,
+                            "Column": 5
+                          },
+                          "End": {
+                            "Filename": "./fixture/nginx.conf",
+                            "Offset": 1831,
+                            "Line": 69,
+                            "Column": 4
+                          },
+                          "Params": [
+                            {
+                              "Text": "/",
+                              "Start": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 1773,
+                                "Line": 66,
+                                "Column": 14
+                              },
+                              "End": {
+                                "Filename": "./fixture/nginx.conf",
+                                "Offset": 1774,
+                                "Line": 66,
+                                "Column": 15
+                              }
+                            }
+                          ],
+                          "Body": {
+                            "Start": {
+                              "Filename": "./fixture/nginx.conf",
+                              "Offset": 1775,
+                              "Line": 66,
+                              "Column": 16
+                            },
+                            "End": {
+                              "Filename": "./fixture/nginx.conf",
+                              "Offset": 1827,
+                              "Line": 68,
+                              "Column": 6
+                            },
+                            "Blocks": [
+                              {
+                                "Name": "proxy_pass",
+                                "Start": {
+                                  "Filename": "./fixture/nginx.conf",
+                                  "Offset": 1783,
+                                  "Line": 67,
+                                  "Column": 7
+                                },
+                                "End": {
+                                  "Filename": "./fixture/nginx.conf",
+                                  "Offset": 1827,
+                                  "Line": 68,
+                                  "Column": 6
+                                },
+                                "Params": [
+                                  {
+                                    "Text": "http://big_server_com",
+                                    "Start": {
+                                      "Filename": "./fixture/nginx.conf",
+                                      "Offset": 1799,
+                                      "Line": 67,
+                                      "Column": 23
+                                    },
+                                    "End": {
+                                      "Filename": "./fixture/nginx.conf",
+                                      "Offset": 1820,
+                                      "Line": 67,
+                                      "Column": 44
+                                    }
+                                  }
+                                ],
+                                "Body": null,
+                                "Comments": null
+                              }
+                            ]
+                          },
+                          "Comments": null
+                        }
+                      ]
+                    },
+                    "Comments": null
+                  }
+                ]
+              },
+              "Comments": null
+            }
+          ]
+        },
+        "Comments": null
+      }
+    ]
+  },
+  "Comments": null
+}

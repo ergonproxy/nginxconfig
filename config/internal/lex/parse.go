@@ -51,7 +51,7 @@ func lex(s *Scanner,
 		}
 		tok = s.Scan()
 		for !isSpecialToken(tok) {
-			stmt.Params = append(stmt.Params, nginx.Token{
+			stmt.Params = append(stmt.Params, &nginx.Token{
 				Text:  s.TokenText(),
 				Start: s.Position,
 				End:   s.Pos(),

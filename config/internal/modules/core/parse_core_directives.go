@@ -79,7 +79,7 @@ func events(d *nginx.Directive) (*nginx.Events, error) {
 		case "worker_aio_requests":
 		case "worker_connections":
 		default:
-			e.Add(child.Error("Unknown directive"))
+			e.Add(child.Error("Unknown directive: " + child.Name))
 		}
 	}
 	if e.HasErrors() {
