@@ -376,8 +376,11 @@ func (p *Process) releaseResources(ctx context.Context) error {
 	return e
 }
 
-// Run runs vince
 func Run() error {
+	return runDaemon(run)
+}
+
+func run() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	lg, err := newLogger()
