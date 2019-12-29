@@ -15,6 +15,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -73,16 +74,18 @@ type Process struct {
 		readers []func() (Msg, error)
 		writers []func(Msg) error
 	}
+	connManager *ConnManager
 }
 
 func New() *Process {
 	return &Process{
-		main:      !IsChild(),
-		pid:       os.Getpid(),
-		pidFile:   PIDFile,
-		ppid:      os.Getppid(),
-		binary:    os.Args[0],
-		heartBeat: 3 * time.Second,
+		main:        !IsChild(),
+		pid:         os.Getpid(),
+		pidFile:     PIDFile,
+		ppid:        os.Getppid(),
+		binary:      os.Args[0],
+		heartBeat:   3 * time.Second,
+		connManager: NewConnManager(),
 	}
 }
 
@@ -425,6 +428,7 @@ func (p *Process) manageChildStats(ctx context.Context, in io.ReadCloser, out io
 			} else {
 				p.average = m.Body
 			}
+			p.syncConnStats()
 			err = enc.Encode(Msg{PID: p.pid, Body: p.stats})
 			if err != nil {
 				lg.Error("Writing stats", zap.Error(err))
@@ -468,12 +472,23 @@ func (p *Process) manageServers(ctx context.Context) error {
 		lg := log(ctx)
 		for _, ls := range p.sockets {
 			srv := defaultServer()
+			srv.ConnState = p.connManager.Manage
+			srv.ConnContext = func(ctx context.Context, _ net.Conn) context.Context {
+				return withLog(ctx, lg)
+			}
 			p.servers = append(p.servers, srv)
 			lg.Debug("Start HTTP Server", zap.String("address", ls.Addr().String()))
 			go srv.Serve(ls)
 		}
 	}
 	return nil
+}
+
+func (p *Process) syncConnStats() {
+	atomic.StoreInt64(&p.stats.Open, atomic.LoadInt64(&p.connManager.open))
+	atomic.StoreInt64(&p.stats.Idle, atomic.LoadInt64(&p.connManager.idle))
+	atomic.StoreInt64(&p.stats.Active, atomic.LoadInt64(&p.connManager.active))
+	atomic.StoreInt64(&p.stats.Hijacked, atomic.LoadInt64(&p.connManager.hijacked))
 }
 
 func (p *Process) manageStats(ctx context.Context) error {
@@ -526,7 +541,7 @@ func (p *Process) mainStatsLoop(ctx context.Context) {
 				total.Active += msgs[i].Body.Active
 				total.Hijacked += msgs[i].Body.Hijacked
 			}
-			lg.Sugar().Info(total)
+			lg.Sugar().Infof("%#v\n", total)
 		}
 	}
 }

@@ -1,9 +1,7 @@
 package engine
 
 import (
-	"fmt"
 	"net/http"
-	"os"
 )
 
 const welcome = `<!DOCTYPE html>
@@ -33,7 +31,7 @@ Commercial support is available at
 </html>`
 
 func defaultHand(w http.ResponseWriter, r *http.Request) {
-	fmt.Println(os.Getpid(), r.Method, r.Host)
+	log(r.Context()).Debug(r.Method)
 	w.Write([]byte(welcome))
 }
 

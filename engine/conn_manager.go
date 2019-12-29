@@ -29,8 +29,11 @@ func (m *ConnManager) Manage(conn net.Conn, state http.ConnState) {
 		m.inc(state)
 	case http.StateActive:
 		m.changeState(conn, func(i *ConnInfo) {
-			switch i.State {
-			case http.StateIdle:
+			if i.State != http.StateNew {
+				// When we transition from new , we still mark the connection as open but in
+				// active state, so here we have two records of the same connection since
+				// the connection is both open and active.
+				// This means we don't reduce open connections.
 				m.dec(i.State)
 			}
 			i.State = state
@@ -38,32 +41,24 @@ func (m *ConnManager) Manage(conn net.Conn, state http.ConnState) {
 		m.inc(state)
 	case http.StateIdle:
 		m.changeState(conn, func(i *ConnInfo) {
-			switch i.State {
-			case http.StateActive:
-				m.dec(i.State)
-			}
+			m.dec(i.State)
 			i.State = state
-			atomic.AddInt64(&m.active, -1)
 		})
 		m.inc(state)
 	case http.StateHijacked:
 		m.changeState(conn, func(i *ConnInfo) {
-			switch i.State {
-			case http.StateActive:
-				m.dec(i.State)
-			}
+			m.dec(i.State)
 			i.State = state
 		})
 		m.inc(state)
 	case http.StateClosed:
 		m.changeState(conn, func(i *ConnInfo) {
-			switch i.State {
-			case http.StateIdle, http.StateActive:
-				m.dec(i.State)
+			m.dec(i.State)
+			if i.State != http.StateNew {
+				m.dec(http.StateNew)
 			}
 			i.State = state
 		})
-		m.dec(http.StateNew)
 		m.conns.Delete(conn)
 	}
 }
