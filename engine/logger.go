@@ -17,5 +17,5 @@ func withLog(ctx context.Context, lg *zap.Logger) context.Context {
 }
 
 func newLogger() (*zap.Logger, error) {
-	return zap.NewDevelopment()
+	return zap.NewProduction()
 }

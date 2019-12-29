@@ -1,10 +1,12 @@
 package engine
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"go.uber.org/zap"
+	"io"
 	"io/ioutil"
 	"net"
 	"os"
@@ -14,6 +16,9 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
+
+	"go.uber.org/zap"
 )
 
 const (
@@ -38,6 +43,10 @@ func (e errorList) Error() string {
 	return strings.Join([]string(e), "\n")
 }
 
+type Stats struct {
+	Open, Idle, Active, Hijacked int64
+}
+
 type Server interface {
 	Serve(net.Listener) error
 	Shutdown(context.Context) error
@@ -46,26 +55,34 @@ type Server interface {
 
 // Process defines nginx process. Main process spans child processes.
 type Process struct {
-	main        bool
-	pid         int
-	pidFile     string
-	ppid        int
-	env         []string
-	binary      string
-	sockets     []net.Listener
-	socketFiles []*os.File
-	children    []*exec.Cmd
-	servers     []Server
-	closed      bool
+	main           bool
+	pid            int
+	pidFile        string
+	ppid           int
+	env            []string
+	binary         string
+	sockets        []net.Listener
+	socketFiles    []*os.File
+	children       []*exec.Cmd
+	servers        []Server
+	closed         bool
+	average        Stats
+	stats          Stats
+	heartBeat      time.Duration
+	statColllector struct {
+		readers []func() (Msg, error)
+		writers []func(Msg) error
+	}
 }
 
 func New() *Process {
 	return &Process{
-		main:    !IsChild(),
-		pid:     os.Getpid(),
-		pidFile: PIDFile,
-		ppid:    os.Getppid(),
-		binary:  os.Args[0],
+		main:      !IsChild(),
+		pid:       os.Getpid(),
+		pidFile:   PIDFile,
+		ppid:      os.Getppid(),
+		binary:    os.Args[0],
+		heartBeat: 3 * time.Second,
 	}
 }
 
@@ -156,9 +173,18 @@ func (p *Process) StartChildren() error {
 	for i := 0; i < runtime.NumCPU(); i++ {
 		cmd := exec.Command(p.binary)
 		cmd.ExtraFiles = p.socketFiles
-		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		cmd.Env = append(p.env, env...)
+		in, err := cmd.StdinPipe()
+		if err != nil {
+			return err
+		}
+		out, err := cmd.StdoutPipe()
+		if err != nil {
+			return err
+		}
+		p.statColllector.readers = append(p.statColllector.readers, outReader(out))
+		p.statColllector.writers = append(p.statColllector.writers, inWriter(in))
 		if err := cmd.Start(); err != nil {
 			return err
 		}
@@ -167,61 +193,38 @@ func (p *Process) StartChildren() error {
 	return nil
 }
 
-func (p *Process) Info() {
-	m := map[string]interface{}{
-		"main": p.main,
-		"pid":  p.pid,
-		"ppid": p.ppid,
-	}
-	fmt.Printf("%v\n", m)
-}
-
 // Run starts children process if this is the main process and listens for
 // control signals.
-func (p *Process) Run(ctx context.Context) (err error) {
+func (p *Process) Run(ctx context.Context) error {
 	defer func() {
-		err = p.releaseResources(ctx)
+		p.releaseResources(ctx)
 	}()
-	p.Info()
+	lg := log(ctx)
+	if p.main {
+		lg.Info("Start main process", zap.Int("pid", p.pid))
+	} else {
+		lg.Info("Start child process", zap.Int("pid", p.pid))
+	}
 	if err := p.WritePID(); err != nil {
 		return err
 	}
-	if p.main {
-		ls, err := net.Listen("tcp", ":8090")
-		if err != nil {
-			return err
-		}
-		p.sockets = append(p.sockets, ls)
-		f, err := socketToFile(ls)
-		if err != nil {
-			return err
-		}
-		p.socketFiles = append(p.socketFiles, f)
-	} else {
-		fds, err := parseFD(os.Getenv(FileDescriptions))
-		if err != nil {
-			return err
-		}
-		for _, fd := range fds {
-			f := fd.File()
-			p.socketFiles = append(p.socketFiles, f)
-			ls, err := net.FileListener(f)
-			if err != nil {
-				return err
-			}
-			p.sockets = append(p.sockets, ls)
-		}
+
+	if err := p.manageSockets(ctx); err != nil {
+		return err
 	}
+
 	if err := p.StartChildren(); err != nil {
 		return err
 	}
-	if !p.main {
-		for _, ls := range p.sockets {
-			srv := defaultServer()
-			p.servers = append(p.servers, srv)
-			fmt.Printf("[%d] starting serving at %s\n", p.pid, ls.Addr().String())
-			go srv.Serve(ls)
-		}
+
+	// start servers that listen on registered sockets
+	if err := p.manageServers(ctx); err != nil {
+		return err
+	}
+
+	// start stats collection/publishing loop
+	if err := p.manageStats(ctx); err != nil {
+		return err
 	}
 	ch := make(chan os.Signal, 2)
 	signal.Notify(
@@ -238,36 +241,36 @@ func (p *Process) Run(ctx context.Context) (err error) {
 		sig := <-ch
 		switch sig {
 		case syscall.SIGTERM, syscall.SIGINT:
-			fmt.Println("fast shutdown")
+			lg.Debug("fast shutdown")
 			return p.FastClose(ctx)
 		case syscall.SIGQUIT:
-			fmt.Println("graceful shutdown")
+			lg.Debug("graceful shutdown")
 			return p.Graceful(ctx)
 		case syscall.SIGHUP:
-			fmt.Println("reload configuration")
+			lg.Debug("reload configuration")
 		case syscall.SIGUSR1:
-			fmt.Println("reopening log files")
+			lg.Debug("reopening log files")
 		case syscall.SIGUSR2:
-			fmt.Println("upgrading an executable files")
+			lg.Debug("upgrading an executable files")
 		case syscall.SIGWINCH:
-			fmt.Println("graceful shutdown of worker process")
+			lg.Debug("graceful shutdown of worker process")
 			if p.main {
 				// we send the signal to worker process
-				var e errorList
 				for _, ch := range p.children {
 					if err := ch.Process.Signal(syscall.SIGUSR2); err != nil {
-						e = append(e, err.Error())
+						lg.Error("Sending signal to child process",
+							zap.String("signal", sig.String()),
+							zap.Int("pid", ch.Process.Pid),
+							zap.Error(err),
+						)
 					}
-				}
-				if e != nil {
-					fmt.Println(e)
 				}
 				// we are not exiting this loop since the main process remains operational.
 			} else {
 				return p.Graceful(ctx)
 			}
 		default:
-			fmt.Println("received unknown signal ", sig.String())
+			lg.Debug("received unknown signal ", zap.String("signal", sig.String()))
 		}
 	}
 }
@@ -390,5 +393,156 @@ func run() error {
 	defer lg.Sync()
 	ctx = withLog(ctx, lg)
 	runFlags(ctx)
-	return New().Run(ctx)
+	err = New().Run(ctx)
+	if err != nil {
+		lg.Error("Vince", zap.Error(err))
+	}
+	return err
+}
+
+type Msg struct {
+	PID  int
+	Body Stats
+}
+
+func (p *Process) manageChildStats(ctx context.Context, in io.ReadCloser, out io.WriteCloser) error {
+	lg := log(ctx)
+	dec := json.NewDecoder(bufio.NewReader(in))
+	enc := json.NewEncoder(out)
+	tick := time.NewTicker(p.heartBeat)
+	defer tick.Stop()
+	var m Msg
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-tick.C:
+			err := dec.Decode(&m)
+			if err != nil {
+				if err != io.EOF {
+					lg.Error("Decoding message from input", zap.Error(err))
+				}
+			} else {
+				p.average = m.Body
+			}
+			err = enc.Encode(Msg{PID: p.pid, Body: p.stats})
+			if err != nil {
+				lg.Error("Writing stats", zap.Error(err))
+			}
+		}
+	}
+}
+
+func (p *Process) manageSockets(ctx context.Context) error {
+	if p.main {
+		ls, err := net.Listen("tcp", ":8090")
+		if err != nil {
+			return err
+		}
+		p.sockets = append(p.sockets, ls)
+		f, err := socketToFile(ls)
+		if err != nil {
+			return err
+		}
+		p.socketFiles = append(p.socketFiles, f)
+	} else {
+		fds, err := parseFD(os.Getenv(FileDescriptions))
+		if err != nil {
+			return err
+		}
+		for _, fd := range fds {
+			f := fd.File()
+			p.socketFiles = append(p.socketFiles, f)
+			ls, err := net.FileListener(f)
+			if err != nil {
+				return err
+			}
+			p.sockets = append(p.sockets, ls)
+		}
+	}
+	return nil
+}
+
+func (p *Process) manageServers(ctx context.Context) error {
+	if !p.main {
+		lg := log(ctx)
+		for _, ls := range p.sockets {
+			srv := defaultServer()
+			p.servers = append(p.servers, srv)
+			lg.Debug("Start HTTP Server", zap.String("address", ls.Addr().String()))
+			go srv.Serve(ls)
+		}
+	}
+	return nil
+}
+
+func (p *Process) manageStats(ctx context.Context) error {
+	if p.main {
+		return p.manageMainStats(ctx)
+	}
+	return p.manageChildStats(ctx, os.Stdin, os.Stdout)
+}
+
+func (p *Process) manageMainStats(ctx context.Context) error {
+	if !p.main {
+		return nil
+	}
+	go p.mainStatsLoop(ctx)
+	return nil
+}
+
+func (p *Process) mainStatsLoop(ctx context.Context) {
+	tick := time.NewTicker(p.heartBeat)
+	defer tick.Stop()
+	lg := log(ctx)
+	msgs := make([]Msg, len(p.children))
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+			m := Msg{PID: p.pid, Body: p.average}
+			for _, w := range p.statColllector.writers {
+				if err := w(m); err != nil {
+					lg.Error("Writing ", zap.Error(err))
+				}
+			}
+			for i, r := range p.statColllector.readers {
+				v, err := r()
+				if err != nil {
+					if err != io.EOF {
+						lg.Error("Readeing ", zap.Error(err))
+					}
+				} else {
+					lg.Debug("Received stats from", zap.Int("pid", v.PID))
+					msgs[i] = v
+				}
+			}
+			var total Stats
+			for i := 0; i < len(msgs); i++ {
+				total.Open += msgs[i].Body.Open
+				total.Idle += msgs[i].Body.Idle
+				total.Active += msgs[i].Body.Active
+				total.Hijacked += msgs[i].Body.Hijacked
+			}
+			lg.Sugar().Info(total)
+		}
+	}
+}
+
+func outReader(in io.Reader) func() (Msg, error) {
+	dec := json.NewDecoder(bufio.NewReader(in))
+	return func() (Msg, error) {
+		var m Msg
+		err := dec.Decode(&m)
+		return m, err
+	}
+}
+
+func inWriter(out io.Writer) func(Msg) error {
+	enc := json.NewEncoder(out)
+	return func(m Msg) error {
+		return enc.Encode(m)
+	}
 }
