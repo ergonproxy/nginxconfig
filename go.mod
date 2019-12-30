@@ -4,6 +4,7 @@ go 1.12
 
 require (
 	github.com/dgraph-io/badger v1.6.0
+	github.com/pires/go-proxyproto v0.0.0-20191211124218-517ecdf5bb2b
 	github.com/stretchr/testify v1.4.0
 	github.com/takama/daemon v0.11.0
 	go.uber.org/zap v1.13.0

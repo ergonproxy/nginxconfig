@@ -9,6 +9,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -77,7 +78,7 @@ type Process struct {
 	connManager *ConnManager
 }
 
-func New() *Process {
+func New(lg *zap.Logger) *Process {
 	return &Process{
 		main:        !IsChild(),
 		pid:         os.Getpid(),
@@ -85,7 +86,7 @@ func New() *Process {
 		ppid:        os.Getppid(),
 		binary:      os.Args[0],
 		heartBeat:   3 * time.Second,
-		connManager: NewConnManager(),
+		connManager: NewConnManager(lg),
 	}
 }
 
@@ -396,7 +397,7 @@ func run() error {
 	defer lg.Sync()
 	ctx = withLog(ctx, lg)
 	runFlags(ctx)
-	err = New().Run(ctx)
+	err = New(lg).Run(ctx)
 	if err != nil {
 		lg.Error("Vince", zap.Error(err))
 	}
@@ -471,11 +472,10 @@ func (p *Process) manageServers(ctx context.Context) error {
 	if !p.main {
 		lg := log(ctx)
 		for _, ls := range p.sockets {
-			srv := defaultServer()
+			srv := httpServer(http.HandlerFunc(defaultHand))
 			srv.ConnState = p.connManager.Manage
-			srv.ConnContext = func(ctx context.Context, _ net.Conn) context.Context {
-				return withLog(ctx, lg)
-			}
+			srv.BaseContext = p.connManager.BaseContext
+			srv.ConnContext = p.connManager.ConnContext
 			p.servers = append(p.servers, srv)
 			lg.Debug("Start HTTP Server", zap.String("address", ls.Addr().String()))
 			go srv.Serve(ls)

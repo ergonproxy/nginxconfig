@@ -1,31 +1,44 @@
 package engine
 
 import (
+	"context"
 	"net"
 	"net/http"
+	"os"
 	"sync"
 	"sync/atomic"
+
+	"github.com/ergongate/vince/version"
+	"go.uber.org/zap"
 )
 
 type ConnManager struct {
 	conns                        *sync.Map
 	open, active, idle, hijacked int64
 	serial                       int64
+	pid                          int
+	version                      string
+	logger                       *zap.Logger
 }
 
-func NewConnManager() *ConnManager {
+func NewConnManager(lg *zap.Logger) *ConnManager {
 	return &ConnManager{
-		conns: &sync.Map{},
+		conns:   &sync.Map{},
+		pid:     os.Getpid(),
+		version: version.Version,
+		logger:  lg,
 	}
 }
 
 func (m *ConnManager) Manage(conn net.Conn, state http.ConnState) {
 	switch state {
 	case http.StateNew:
-		m.conns.Store(conn, &ConnInfo{
-			ID:    m.id(),
-			State: state,
-		})
+		if _, ok := m.conns.Load(conn); !ok {
+			m.conns.Store(conn, &ConnInfo{
+				ID:    m.id(),
+				State: state,
+			})
+		}
 		m.inc(state)
 	case http.StateActive:
 		m.changeState(conn, func(i *ConnInfo) {
@@ -36,6 +49,7 @@ func (m *ConnManager) Manage(conn net.Conn, state http.ConnState) {
 				// This means we don't reduce open connections.
 				m.dec(i.State)
 			}
+			i.NumRequests++
 			i.State = state
 		})
 		m.inc(state)
@@ -61,6 +75,47 @@ func (m *ConnManager) Manage(conn net.Conn, state http.ConnState) {
 		})
 		m.conns.Delete(conn)
 	}
+}
+
+func (m *ConnManager) BaseContext(ls net.Listener) context.Context {
+	v := &sync.Map{}
+	v.Store("$nginx_version", version.Version)
+	v.Store("$pid", m.pid)
+	return context.WithValue(withLog(context.Background(), m.logger), variables{}, v)
+}
+
+func (m *ConnManager) ConnContext(ctx context.Context, conn net.Conn) context.Context {
+	var info *ConnInfo
+	if v, ok := m.conns.Load(conn); ok {
+		info = v.(*ConnInfo)
+	} else {
+		info = &ConnInfo{
+			ID: m.id(),
+		}
+		m.conns.Store(conn, info)
+	}
+	v := ctx.Value(variables{}).(*sync.Map)
+	v.Store("$connection", info.ID)
+	v.Store("$connection_requests", info.NumRequests)
+	switch e := conn.(type) {
+	case *ProxyConn:
+		h, p, _ := net.SplitHostPort(e.RemoteAddr().String())
+		v.Store("$proxy_protocol_addr", h)
+		v.Store("$proxy_protocol_port", p)
+
+		h, p, _ = net.SplitHostPort(e.LocalAddr().String())
+		v.Store("$proxy_protocol_server_addr", h)
+		v.Store("$proxy_protocol_server_port", p)
+
+		h, p, _ = net.SplitHostPort(e.Remote.String())
+		v.Store("$remote_addr", h)
+		v.Store("$remote_port", p)
+	default:
+		h, p, _ := net.SplitHostPort(e.RemoteAddr().String())
+		v.Store("$remote_addr", h)
+		v.Store("$remote_port", p)
+	}
+	return context.WithValue(ctx, variables{}, v)
 }
 
 // Close update connection state to closed. This is mainly used with connections
@@ -129,8 +184,9 @@ func (m *ConnManager) GetStatus() ConnStatus {
 }
 
 type ConnInfo struct {
-	ID    int64
-	State http.ConnState
+	ID          int64
+	NumRequests int64
+	State       http.ConnState
 }
 
 type ConnStatus struct {

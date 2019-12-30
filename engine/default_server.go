@@ -1,7 +1,9 @@
 package engine
 
 import (
+	"encoding/json"
 	"net/http"
+	"sync"
 )
 
 const welcome = `<!DOCTYPE html>
@@ -31,12 +33,24 @@ Commercial support is available at
 </html>`
 
 func defaultHand(w http.ResponseWriter, r *http.Request) {
-	log(r.Context()).Debug(r.Method)
-	w.Write([]byte(welcome))
+	m := make(map[string]interface{})
+	r.Context().Value(variables{}).(*sync.Map).Range(func(key, value interface{}) bool {
+		m[key.(string)] = value
+		return true
+	})
+	err := json.NewEncoder(w).Encode(m)
+	if err != nil {
+	}
 }
 
-func defaultServer() *http.Server {
+func httpServer(h http.Handler) *http.Server {
 	return &http.Server{
-		Handler: http.HandlerFunc(defaultHand),
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			v := r.Context().Value(variables{}).(*sync.Map)
+			setArgs(r, v)
+			setHeaders(r, v)
+			setCookies(r, v)
+			h.ServeHTTP(w, r)
+		}),
 	}
 }

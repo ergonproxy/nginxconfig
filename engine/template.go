@@ -2,8 +2,11 @@ package engine
 
 import (
 	"context"
+	"fmt"
 	"html/template"
+	"net/http"
 	"regexp"
+	"strings"
 	"sync"
 )
 
@@ -22,13 +25,26 @@ func set(ctx context.Context, key, value interface{}) {
 
 var variableRegexp = regexp.MustCompile(`\$([a-z_]\w*)`)
 
-// VariablesToTemplates return src with all matching vnginx variable names
-// repaced with go's template syntax
-func VariablesToTemplates(src []byte) []byte {
+// resolveVariables replaces any variables with their values.
+func resolveVariables(src []byte, ctx *sync.Map) []byte {
 	return variableRegexp.ReplaceAllFunc(src, func(name []byte) []byte {
 		n := string(name)
-		return []byte("{{." + n + "}}")
+		if v, ok := ctx.Load(n); ok {
+			return toByte(v)
+		}
+		return []byte{}
 	})
+}
+
+func toByte(v interface{}) []byte {
+	switch e := v.(type) {
+	case []byte:
+		return e
+	case string:
+		return []byte(e)
+	default:
+		return []byte(fmt.Sprint(v))
+	}
 }
 
 const specialError = `
@@ -41,3 +57,36 @@ const specialError = `
 </html`
 
 var httpErrorTemplate = template.Must(template.New("error").Parse(specialError))
+
+// sets variables $arg and $arg_name
+func setArgs(r *http.Request, m *sync.Map) {
+	m.Store("$arg", r.URL.RawQuery)
+	m.Store("$query_string", r.URL.RawQuery)
+	q := r.URL.Query()
+	for k := range q {
+		m.Store("$arg_"+k, q.Get(k))
+	}
+}
+
+func setHeaders(r *http.Request, m *sync.Map) {
+	src := []struct{ variable, header string }{
+		{"$content_length", "Content-Length"},
+		{"$content_type", "Content-Type"},
+	}
+	for _, v := range src {
+		m.Store(v.variable, r.Header.Get(v.header))
+	}
+	for v := range r.Header {
+		m.Store("$http_"+toname(v), r.Header.Get(v))
+	}
+}
+
+func setCookies(r *http.Request, m *sync.Map) {
+	for _, v := range r.Cookies() {
+		m.Store("$cookie_"+toname(v.Name), v.Value)
+	}
+}
+
+func toname(s string) string {
+	return strings.Replace(strings.ToLower(s), "-", "_", -1)
+}
