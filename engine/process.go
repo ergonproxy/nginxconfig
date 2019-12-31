@@ -11,7 +11,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"os/signal"
 	"runtime"
 	"strconv"
@@ -51,22 +50,18 @@ type Server interface {
 
 // Process defines nginx process. Main process spans child processes.
 type Process struct {
-	main           bool
-	pid            int
-	ppid           int
-	env            []string
-	binary         string
-	sockets        []net.Listener
-	socketFiles    []*os.File
-	children       []*exec.Cmd
-	servers        []Server
-	closed         bool
-	average        ConnStatus
-	heartBeat      time.Duration
-	statColllector struct {
-		readers []func() (Msg, error)
-		writers []func(Msg) error
-	}
+	main        bool
+	pid         int
+	ppid        int
+	env         []string
+	binary      string
+	sockets     []net.Listener
+	socketFiles []*os.File
+	children    []*Command
+	servers     []Server
+	closed      bool
+	average     ConnStatus
+	heartBeat   time.Duration
 	connManager *ConnManager
 	mainCtx     mainContext
 }
@@ -160,28 +155,17 @@ func (p *Process) genChildEnv() []string {
 // TODO:
 // Start the child process with unprivileged user with no read/write access to
 // system resources except the incoming requests.
-func (p *Process) StartChildren() error {
+func (p *Process) StartChildren(ctx context.Context) error {
 	if !p.main {
 		// NoOp when this is not a main process
 		return nil
 	}
 	env := p.genChildEnv()
 	for i := 0; i < runtime.NumCPU(); i++ {
-		cmd := exec.Command(p.binary)
+		cmd := NewCommand(ctx, p.binary)
 		cmd.ExtraFiles = p.socketFiles
-		cmd.Stderr = os.Stderr
 		cmd.Env = append(p.env, env...)
-		in, err := cmd.StdinPipe()
-		if err != nil {
-			return err
-		}
-		out, err := cmd.StdoutPipe()
-		if err != nil {
-			return err
-		}
-		p.statColllector.readers = append(p.statColllector.readers, outReader(out))
-		p.statColllector.writers = append(p.statColllector.writers, inWriter(in))
-		if err := cmd.Start(); err != nil {
+		if err := cmd.Run(); err != nil {
 			return err
 		}
 		p.children = append(p.children, cmd)
@@ -226,7 +210,7 @@ func (p *Process) Run(ctx context.Context) error {
 		return err
 	}
 
-	if err := p.StartChildren(); err != nil {
+	if err := p.StartChildren(ctx); err != nil {
 		return err
 	}
 
@@ -270,10 +254,10 @@ func (p *Process) Run(ctx context.Context) error {
 			if p.main {
 				// we send the signal to worker process
 				for _, ch := range p.children {
-					if err := ch.Process.Signal(syscall.SIGUSR2); err != nil {
+					if err := ch.Signal(syscall.SIGUSR2); err != nil {
 						lg.Error("Sending signal to child process",
 							zap.String("signal", sig.String()),
-							zap.Int("pid", ch.Process.Pid),
+							zap.Int("pid", ch.PID()),
 							zap.Error(err),
 						)
 					}
@@ -313,7 +297,7 @@ func (p *Process) Close(ctx context.Context) error {
 	var e errorList
 	if p.main {
 		for _, ch := range p.children {
-			if err := ch.Process.Kill(); err != nil {
+			if err := ch.Kill(); err != nil {
 				e = append(e, err.Error())
 			}
 		}
@@ -331,7 +315,7 @@ func (p *Process) FastClose(ctx context.Context) error {
 	var e errorList
 	if p.main {
 		for _, ch := range p.children {
-			if err := ch.Process.Kill(); err != nil {
+			if err := ch.Kill(); err != nil {
 				e = append(e, err.Error())
 			}
 		}
@@ -519,13 +503,13 @@ func (p *Process) mainStatsLoop(ctx context.Context) {
 			return
 		case <-tick.C:
 			m := Msg{PID: p.pid, Body: p.average}
-			for _, w := range p.statColllector.writers {
-				if err := w(m); err != nil {
+			for _, w := range p.children {
+				if err := w.WriteMSG(m); err != nil {
 					lg.Error("Writing ", zap.Error(err))
 				}
 			}
-			for i, r := range p.statColllector.readers {
-				v, err := r()
+			for i, r := range p.children {
+				v, err := r.ReadMSG()
 				if err != nil {
 					if err != io.EOF {
 						lg.Error("Readeing ", zap.Error(err))
