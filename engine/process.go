@@ -16,7 +16,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -44,10 +43,6 @@ func (e errorList) Error() string {
 	return strings.Join([]string(e), "\n")
 }
 
-type Stats struct {
-	Open, Idle, Active, Hijacked int64
-}
-
 type Server interface {
 	Serve(net.Listener) error
 	Shutdown(context.Context) error
@@ -66,8 +61,7 @@ type Process struct {
 	children       []*exec.Cmd
 	servers        []Server
 	closed         bool
-	average        Stats
-	stats          Stats
+	average        ConnStatus
 	heartBeat      time.Duration
 	statColllector struct {
 		readers []func() (Msg, error)
@@ -421,7 +415,7 @@ func run() error {
 
 type Msg struct {
 	PID  int
-	Body Stats
+	Body ConnStatus
 }
 
 func (p *Process) manageChildStats(ctx context.Context, in io.ReadCloser, out io.WriteCloser) error {
@@ -444,8 +438,7 @@ func (p *Process) manageChildStats(ctx context.Context, in io.ReadCloser, out io
 			} else {
 				p.average = m.Body
 			}
-			p.syncConnStats()
-			err = enc.Encode(Msg{PID: p.pid, Body: p.stats})
+			err = enc.Encode(Msg{PID: p.pid, Body: p.connManager.GetStatus()})
 			if err != nil {
 				lg.Error("Writing stats", zap.Error(err))
 			}
@@ -499,13 +492,6 @@ func (p *Process) manageServers(ctx context.Context) error {
 	return nil
 }
 
-func (p *Process) syncConnStats() {
-	atomic.StoreInt64(&p.stats.Open, atomic.LoadInt64(&p.connManager.open))
-	atomic.StoreInt64(&p.stats.Idle, atomic.LoadInt64(&p.connManager.idle))
-	atomic.StoreInt64(&p.stats.Active, atomic.LoadInt64(&p.connManager.active))
-	atomic.StoreInt64(&p.stats.Hijacked, atomic.LoadInt64(&p.connManager.hijacked))
-}
-
 func (p *Process) manageStats(ctx context.Context) error {
 	if p.main {
 		return p.manageMainStats(ctx)
@@ -549,7 +535,7 @@ func (p *Process) mainStatsLoop(ctx context.Context) {
 					msgs[i] = v
 				}
 			}
-			var total Stats
+			var total ConnStatus
 			for i := 0; i < len(msgs); i++ {
 				total.Open += msgs[i].Body.Open
 				total.Idle += msgs[i].Body.Idle
