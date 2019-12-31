@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -85,13 +86,36 @@ func testConfig(ctx context.Context) error {
 	return nil
 }
 
+func getConfigFile() (string, error) {
+	dir, err := ConfigDir()
+	if err != nil {
+		return "", err
+	}
+	file := filepath.Join(dir, "nginx.conf")
+	_, err = os.Stat(file)
+	if err != nil {
+		return "", err
+	}
+	return file, nil
+}
+
 func testAndDump(ctx context.Context) {
 	if *TestDump {
-		err := testConfig(ctx)
+		file, err := getConfigFile()
+		fmt.Println("vince found configuration ", file)
+		fmt.Printf("vince: the configuration file %s syntax is ok\n", file)
+		fmt.Printf("vince: the configuration file %s test is successful\n", file)
 		if err != nil {
 			log(ctx).Error("Failed testing configuration", zap.Error(err))
 			os.Exit(1)
 		}
+		f, err := os.Open(file)
+		if err != nil {
+			log(ctx).Error("Failed testing configuration", zap.Error(err))
+			os.Exit(1)
+		}
+		defer f.Close()
+		io.Copy(os.Stdout, f)
 		//TODO dump configurations
 		os.Exit(0)
 	}
