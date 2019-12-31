@@ -2,7 +2,6 @@ package engine
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -23,26 +22,34 @@ var TestDump = flag.Bool("T", false, "test configuration, dump it and exit")
 func NginxDirs() []string {
 	return []string{
 		"/usr/local/nginx/conf",
-		"/etc/nginx",
 		"/usr/local/etc/nginx",
+		"/etc/nginx",
 	}
 }
 
-// ConfigDir returns the path to nginx configuration directory with an error if
-// no active directory found.
-func ConfigDir() (string, error) {
-	var dir string
-	for _, v := range NginxDirs() {
-		_, err := os.Stat(v)
+// returns the nginx configuration file. This looks for the files in the
+// following directories
+// 	$CWD
+// 	/usr/local/nginx/conf
+// 	/usr/local/etc/nginx
+// 	/etc/nginx
+//
+// The file is searched in the order outlined abouve the first to be found will
+// be returned.
+func nginxFile() (string, error) {
+	wd, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	for _, v := range append([]string{wd}, NginxDirs()...) {
+		file := filepath.Join(v, "nginx.conf")
+		_, err = os.Stat(file)
 		if err == nil {
-			dir = v
-			break
+			return file, nil
 		}
 	}
-	if dir == "" {
-		return "", errors.New("vince: failed to find nginx configuration directory")
-	}
-	return dir, nil
+	return "", os.ErrNotExist
+
 }
 
 func showVersion(ctx context.Context) {
@@ -71,12 +78,7 @@ func testConfiguration(ctx context.Context) {
 }
 
 func testConfig(ctx context.Context) error {
-	dir, err := ConfigDir()
-	if err != nil {
-		return err
-	}
-	file := filepath.Join(dir, "nginx.conf")
-	_, err = os.Stat(file)
+	file, err := nginxFile()
 	if err != nil {
 		return err
 	}
@@ -86,22 +88,9 @@ func testConfig(ctx context.Context) error {
 	return nil
 }
 
-func getConfigFile() (string, error) {
-	dir, err := ConfigDir()
-	if err != nil {
-		return "", err
-	}
-	file := filepath.Join(dir, "nginx.conf")
-	_, err = os.Stat(file)
-	if err != nil {
-		return "", err
-	}
-	return file, nil
-}
-
 func testAndDump(ctx context.Context) {
 	if *TestDump {
-		file, err := getConfigFile()
+		file, err := nginxFile()
 		fmt.Println("vince found configuration ", file)
 		fmt.Printf("vince: the configuration file %s syntax is ok\n", file)
 		fmt.Printf("vince: the configuration file %s test is successful\n", file)
