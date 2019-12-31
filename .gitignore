@@ -13,3 +13,4 @@
 *.pid
 *.old
 vince
+tmp/

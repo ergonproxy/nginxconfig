@@ -20,6 +20,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/ergongate/vince/config"
 	"go.uber.org/zap"
 )
 
@@ -30,8 +31,6 @@ const (
 	// FileDescriptions env var for passing open filedescriptors to child process.
 	// The descriptors are for sockets.
 	FileDescriptions = "VINCE_FD"
-	// PIDFile is the default name for the nginx pid file.
-	PIDFile = "vince.pid"
 )
 
 // IsChild returns true if the binary was invoked as a worker/child process
@@ -59,7 +58,6 @@ type Server interface {
 type Process struct {
 	main           bool
 	pid            int
-	pidFile        string
 	ppid           int
 	env            []string
 	binary         string
@@ -76,13 +74,13 @@ type Process struct {
 		writers []func(Msg) error
 	}
 	connManager *ConnManager
+	mainCtx     mainContext
 }
 
 func New(lg *zap.Logger) *Process {
 	return &Process{
 		main:        !IsChild(),
 		pid:         os.Getpid(),
-		pidFile:     PIDFile,
 		ppid:        os.Getppid(),
 		binary:      os.Args[0],
 		heartBeat:   3 * time.Second,
@@ -200,6 +198,23 @@ func (p *Process) StartChildren() error {
 // Run starts children process if this is the main process and listens for
 // control signals.
 func (p *Process) Run(ctx context.Context) error {
+	configFile, err := nginxFile()
+	if err != nil {
+		return err
+	}
+	f, err := os.Open(configFile)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	d, err := config.LoadDirective(configFile, f)
+	if err != nil {
+		return err
+	}
+	loadContext(&p.mainCtx, d)
+	if err := p.mainCtx.check(); err != nil {
+		return err
+	}
 	defer func() {
 		p.releaseResources(ctx)
 	}()
@@ -287,13 +302,13 @@ func (p *Process) WritePID() error {
 		return nil
 	}
 	pid := strconv.FormatInt(int64(p.pid), 10)
-	if _, err := os.Stat(p.pidFile); err == nil {
-		err = os.Rename(p.pidFile, p.pidFile+".old")
+	if _, err := os.Stat(p.mainCtx.pid); err == nil {
+		err = os.Rename(p.mainCtx.pid, p.mainCtx.pid+".old")
 		if err != nil {
 			return err
 		}
 	}
-	return ioutil.WriteFile(p.pidFile, []byte(pid), 0600)
+	return ioutil.WriteFile(p.mainCtx.pid, []byte(pid), 0600)
 }
 
 // Close sends kill signal to all child process and exits
