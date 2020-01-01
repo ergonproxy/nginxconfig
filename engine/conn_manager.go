@@ -192,3 +192,26 @@ type ConnInfo struct {
 type ConnStatus struct {
 	Open, Active, Idle, Hijacked int64
 }
+
+func (c *ConnStatus) Add(othe *ConnStatus) {
+	atomic.AddInt64(&c.Open, othe.Open)
+	atomic.AddInt64(&c.Active, othe.Active)
+	atomic.AddInt64(&c.Idle, othe.Idle)
+	atomic.AddInt64(&c.Hijacked, othe.Hijacked)
+}
+
+func (c *ConnStatus) Set(othe *ConnStatus) {
+	atomic.StoreInt64(&c.Open, othe.Open)
+	atomic.StoreInt64(&c.Active, othe.Active)
+	atomic.StoreInt64(&c.Idle, othe.Idle)
+	atomic.StoreInt64(&c.Hijacked, othe.Hijacked)
+}
+
+func (c *ConnStatus) Reset() ConnStatus {
+	return ConnStatus{
+		Open:     atomic.SwapInt64(&c.Open, 0),
+		Active:   atomic.SwapInt64(&c.Active, 0),
+		Idle:     atomic.SwapInt64(&c.Idle, 0),
+		Hijacked: atomic.SwapInt64(&c.Hijacked, 0),
+	}
+}

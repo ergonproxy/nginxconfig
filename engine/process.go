@@ -60,10 +60,11 @@ type Process struct {
 	children    []*Command
 	servers     []Server
 	closed      bool
-	average     ConnStatus
+	total       ConnStatus
 	heartBeat   time.Duration
 	connManager *ConnManager
 	mainCtx     mainContext
+	events      chan *Msg
 }
 
 func New(lg *zap.Logger) *Process {
@@ -74,6 +75,7 @@ func New(lg *zap.Logger) *Process {
 		binary:      os.Args[0],
 		heartBeat:   3 * time.Second,
 		connManager: NewConnManager(lg),
+		events:      make(chan *Msg, 1000),
 	}
 }
 
@@ -168,14 +170,45 @@ func (p *Process) StartChildren(ctx context.Context) error {
 		if err := cmd.Run(); err != nil {
 			return err
 		}
+		go p.monitorCommandEvents(ctx, cmd)
 		p.children = append(p.children, cmd)
 	}
 	return nil
 }
 
+func (p *Process) monitorCommandEvents(ctx context.Context, exe *Command) {
+	lg := log(ctx)
+	for {
+		if ctx.Err() != nil {
+			return
+		}
+		msg, err := exe.ReadMSG()
+		if err != nil {
+			if err != io.EOF {
+				lg.Error("reading message ", zap.Int("pid", exe.PID()), zap.Error(err))
+			}
+			continue
+		}
+		p.events <- &msg
+	}
+}
+
+func (p *Process) handleEvents(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case e := <-p.events:
+			p.processMessage(ctx, e)
+		}
+	}
+}
+
 // Run starts children process if this is the main process and listens for
 // control signals.
-func (p *Process) Run(ctx context.Context) error {
+func (p *Process) Run(baseCtx context.Context) error {
+	ctx, cancel := context.WithCancel(baseCtx)
+	defer cancel()
 	configFile, err := nginxFile()
 	if err != nil {
 		return err
@@ -209,6 +242,7 @@ func (p *Process) Run(ctx context.Context) error {
 	if err := p.manageSockets(ctx); err != nil {
 		return err
 	}
+	go p.handleEvents(ctx)
 
 	if err := p.StartChildren(ctx); err != nil {
 		return err
@@ -219,10 +253,8 @@ func (p *Process) Run(ctx context.Context) error {
 		return err
 	}
 
-	// start stats collection/publishing loop
-	if err := p.manageStats(ctx); err != nil {
-		return err
-	}
+	go p.manageStats(ctx)
+
 	ch := make(chan os.Signal, 2)
 	signal.Notify(
 		ch,
@@ -392,40 +424,44 @@ func run() error {
 	runFlags(ctx)
 	err = New(lg).Run(ctx)
 	if err != nil {
-		lg.Error("Vince", zap.Error(err))
+		lg.Debug("Vince: " + err.Error())
 	}
 	return err
 }
 
+type MsgKind uint
+
+const (
+	KindChildConnStat MsgKind = 1 + iota
+	KindMainConnStat
+)
+
 type Msg struct {
 	PID  int
-	Body ConnStatus
+	Kind MsgKind
+	Body json.RawMessage
 }
 
-func (p *Process) manageChildStats(ctx context.Context, in io.ReadCloser, out io.WriteCloser) error {
+func (p *Process) processMessage(ctx context.Context, msg *Msg) {
 	lg := log(ctx)
-	dec := json.NewDecoder(bufio.NewReader(in))
-	enc := json.NewEncoder(out)
-	tick := time.NewTicker(p.heartBeat)
-	defer tick.Stop()
-	var m Msg
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-tick.C:
-			err := dec.Decode(&m)
+	switch msg.Kind {
+	case KindChildConnStat:
+		var s ConnStatus
+		err := json.Unmarshal(msg.Body, &s)
+		if err != nil {
+			lg.Error("decoding connection stats", zap.Error(err))
+			return
+		}
+		p.total.Add(&s)
+	case KindMainConnStat:
+		if !p.main {
+			var s ConnStatus
+			err := json.Unmarshal(msg.Body, &s)
 			if err != nil {
-				if err != io.EOF {
-					lg.Error("Decoding message from input", zap.Error(err))
-				}
-			} else {
-				p.average = m.Body
+				lg.Error("decoding connection stats", zap.Error(err))
+				return
 			}
-			err = enc.Encode(Msg{PID: p.pid, Body: p.connManager.GetStatus()})
-			if err != nil {
-				lg.Error("Writing stats", zap.Error(err))
-			}
+			p.total.Set(&s)
 		}
 	}
 }
@@ -476,73 +512,58 @@ func (p *Process) manageServers(ctx context.Context) error {
 	return nil
 }
 
-func (p *Process) manageStats(ctx context.Context) error {
-	if p.main {
-		return p.manageMainStats(ctx)
-	}
-	return p.manageChildStats(ctx, os.Stdin, os.Stdout)
-}
-
-func (p *Process) manageMainStats(ctx context.Context) error {
-	if !p.main {
-		return nil
-	}
-	go p.mainStatsLoop(ctx)
-	return nil
-}
-
-func (p *Process) mainStatsLoop(ctx context.Context) {
+func (p *Process) manageStats(ctx context.Context) {
 	tick := time.NewTicker(p.heartBeat)
 	defer tick.Stop()
 	lg := log(ctx)
-	msgs := make([]Msg, len(p.children))
-
+	enc := json.NewEncoder(os.Stdout)
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-tick.C:
-			m := Msg{PID: p.pid, Body: p.average}
-			for _, w := range p.children {
-				if err := w.WriteMSG(m); err != nil {
-					lg.Error("Writing ", zap.Error(err))
-				}
-			}
-			for i, r := range p.children {
-				v, err := r.ReadMSG()
-				if err != nil {
-					if err != io.EOF {
-						lg.Error("Readeing ", zap.Error(err))
+			if p.main {
+				// We send total connection stats to all child process. It is important to
+				// make sure the messages are delivered
+				//
+				// Total is reset to 0 as we are countint total connections stats for the
+				// next tick.
+				total := p.total.Reset()
+				b, _ := json.Marshal(total)
+				m := Msg{PID: p.pid, Kind: KindMainConnStat, Body: b}
+				for _, w := range p.children {
+					if err := w.WriteMSG(m); err != nil {
+						lg.Error("Writing ", zap.Error(err))
 					}
-				} else {
-					lg.Debug("Received stats from", zap.Int("pid", v.PID))
-					msgs[i] = v
 				}
+				lg.Sugar().Infof("%#v\n", total)
+			} else {
+				b, _ := json.Marshal(p.connManager.GetStatus())
+				m := Msg{PID: p.pid, Kind: KindChildConnStat, Body: b}
+				enc.Encode(&m)
 			}
-			var total ConnStatus
-			for i := 0; i < len(msgs); i++ {
-				total.Open += msgs[i].Body.Open
-				total.Idle += msgs[i].Body.Idle
-				total.Active += msgs[i].Body.Active
-				total.Hijacked += msgs[i].Body.Hijacked
-			}
-			lg.Sugar().Infof("%#v\n", total)
 		}
 	}
 }
 
-func outReader(in io.Reader) func() (Msg, error) {
+func outReader(ctx context.Context, in io.Reader) func() (Msg, error) {
 	dec := json.NewDecoder(bufio.NewReader(in))
 	return func() (Msg, error) {
+		if ctx.Err() != nil {
+			return Msg{}, ctx.Err()
+		}
 		var m Msg
 		err := dec.Decode(&m)
 		return m, err
 	}
 }
 
-func inWriter(out io.Writer) func(Msg) error {
+func inWriter(ctx context.Context, out io.Writer) func(Msg) error {
 	enc := json.NewEncoder(out)
 	return func(m Msg) error {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		return enc.Encode(m)
 	}
 }

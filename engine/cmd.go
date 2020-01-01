@@ -43,8 +43,8 @@ func (cmd *Command) Run() error {
 	if err != nil {
 		return err
 	}
-	cmd.reader = outReader(out)
-	cmd.writer = inWriter(in)
+	cmd.reader = outReader(cmd.ctx, out)
+	cmd.writer = inWriter(cmd.ctx, in)
 	err = cmd.exec.Start()
 	if err != nil {
 		return err
