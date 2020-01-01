@@ -226,6 +226,8 @@ func (p *Process) Run(baseCtx context.Context) error {
 	if err := p.mainCtx.check(); err != nil {
 		return err
 	}
+	ctx = context.WithValue(ctx, errLogInfo{}, &p.mainCtx.errorLog)
+
 	defer func() {
 		p.releaseResources(ctx)
 	}()

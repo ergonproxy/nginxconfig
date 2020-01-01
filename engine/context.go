@@ -4,6 +4,8 @@ import "github.com/ergongate/vince/config/nginx"
 
 import "errors"
 
+type errLogInfo struct{}
+
 type mainContext struct {
 	errorLog ErrorLog
 	pid      string
@@ -22,7 +24,6 @@ func (ctx *mainContext) set(d *nginx.Directive) bool {
 		ctx.pid = d.Params[0].Text
 	case "error_log":
 		ctx.errorLog.Name = d.Params[0].Text
-
 	}
 	return true
 }

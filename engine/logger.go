@@ -9,7 +9,15 @@ import (
 type loggerKey struct{}
 
 func log(ctx context.Context) *zap.Logger {
-	return ctx.Value(loggerKey{}).(*zap.Logger)
+	lg := ctx.Value(loggerKey{}).(*zap.Logger)
+	if v := ctx.Value(errLogInfo{}); v != nil {
+		i := v.(*ErrorLog)
+		return lg.With(
+			zap.String("error_log_file", i.Name),
+			zap.String("error_log_level", i.Level),
+		)
+	}
+	return lg
 }
 
 func withLog(ctx context.Context, lg *zap.Logger) context.Context {
