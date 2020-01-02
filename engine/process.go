@@ -178,6 +178,12 @@ func (p *Process) StartChildren(ctx context.Context) error {
 
 func (p *Process) monitorCommandEvents(ctx context.Context, exe *Command) {
 	lg := log(ctx)
+	go func() {
+		err := exe.WriteLogs(os.Stderr)
+		if err != nil {
+			lg.Info(err.Error())
+		}
+	}()
 	for {
 		if ctx.Err() != nil {
 			return
@@ -567,5 +573,19 @@ func inWriter(ctx context.Context, out io.Writer) func(Msg) error {
 			return ctx.Err()
 		}
 		return enc.Encode(m)
+	}
+}
+func ioErrWriter(ctx context.Context, errpipe io.Reader) func(io.Writer) error {
+	return func(out io.Writer) error {
+		w := &errWriter{Writer: out}
+		for {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			_, err := io.Copy(w, errpipe)
+			if err != nil {
+				return err
+			}
+		}
 	}
 }

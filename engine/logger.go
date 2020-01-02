@@ -2,6 +2,8 @@ package engine
 
 import (
 	"context"
+	"io"
+	"os"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/buffer"
@@ -48,7 +50,10 @@ func newLogger() (*zap.Logger, error) {
 	c.Encoding = "vince"
 	c.DisableCaller = true
 	c.DisableStacktrace = true
-	return c.Build()
+	enc := zapcore.NewJSONEncoder(c.EncoderConfig)
+	ze := &MsgEncoder{ObjectEncoder: enc, enc: enc}
+	zs := zapcore.AddSync(&errWriter{Writer: os.Stderr})
+	return zap.New(zapcore.NewCore(ze, zs, c.Level)), nil
 }
 
 type MsgCore struct {
@@ -101,8 +106,34 @@ func (msg MsgEncoder) EncodeEntry(entry zapcore.Entry, fields []zapcore.Field) (
 			a = append(a, fields[i])
 		}
 	}
+	f = "error.log"
 	if f != "" {
-		// encode as log message
+		buf, err := msg.enc.EncodeEntry(entry, a)
+		if err != nil {
+			return nil, err
+		}
+		buf.AppendString(f)
+		return buf, nil
 	}
 	return msg.enc.EncodeEntry(entry, a)
+}
+
+type errWriter struct {
+	io.Writer
+}
+
+func (w *errWriter) Write(b []byte) (int, error) {
+	// pick file and select appropriate logger
+	var idx int
+	for i := len(b) - 1; i > 0; i-- {
+		if b[i] == '}' {
+			idx = i + 1
+			if len(b) > idx {
+				b[idx] = '\n'
+				idx++
+			}
+			break
+		}
+	}
+	return w.Writer.Write(b[:idx])
 }

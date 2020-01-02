@@ -17,6 +17,7 @@ type Command struct {
 	ShouldRestart func(*os.ProcessState) bool
 	ExtraFiles    []*os.File
 	Env           []string
+	Stderr        io.Writer
 	exec          *exec.Cmd
 	ctx           context.Context
 	name          string
@@ -24,6 +25,7 @@ type Command struct {
 	err           error
 	reader        func() (Msg, error)
 	writer        func(Msg) error
+	logWriter     func(io.Writer) error
 }
 
 func (cmd *Command) Run() error {
@@ -33,7 +35,6 @@ func (cmd *Command) Run() error {
 	exe := exec.CommandContext(cmd.ctx, cmd.name, cmd.args...)
 	exe.ExtraFiles = cmd.ExtraFiles
 	exe.Env = cmd.Env
-	exe.Stderr = os.Stderr
 	cmd.exec = exe
 	in, err := exe.StdinPipe()
 	if err != nil {
@@ -43,8 +44,13 @@ func (cmd *Command) Run() error {
 	if err != nil {
 		return err
 	}
+	ioerr, err := exe.StderrPipe()
+	if err != nil {
+		return err
+	}
 	cmd.reader = outReader(cmd.ctx, out)
 	cmd.writer = inWriter(cmd.ctx, in)
+	cmd.logWriter = ioErrWriter(cmd.ctx, ioerr)
 	err = cmd.exec.Start()
 	if err != nil {
 		return err
@@ -79,6 +85,10 @@ func (cmd *Command) ReadMSG() (Msg, error) {
 
 func (cmd *Command) WriteMSG(msg Msg) error {
 	return cmd.writer(msg)
+}
+
+func (cmd *Command) WriteLogs(to io.Writer) error {
+	return cmd.logWriter(to)
 }
 
 func (cmd *Command) Signal(sig os.Signal) error {
