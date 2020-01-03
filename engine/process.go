@@ -63,7 +63,7 @@ type Process struct {
 	total       ConnStatus
 	heartBeat   time.Duration
 	connManager *ConnManager
-	mainCtx     mainContext
+	mainCtx     configContext
 	events      chan *Msg
 }
 
@@ -136,6 +136,24 @@ func envToFile(s string) (*fileD, error) {
 	return &fd, nil
 }
 
+func (p *Process) receiveConfigFromMain(ctx context.Context) error {
+	dec := json.NewDecoder(bufio.NewReader(os.Stdin))
+	var msg Msg
+	for {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		err := dec.Decode(&msg)
+		if err == nil {
+			err := json.Unmarshal(msg.Body, &p.mainCtx)
+			if err != nil {
+				return err
+			}
+			return nil
+		}
+	}
+}
+
 func (p *Process) genChildEnv() []string {
 	var env []string
 	childEnv := ChildProcess + "=true"
@@ -163,11 +181,20 @@ func (p *Process) StartChildren(ctx context.Context) error {
 		return nil
 	}
 	env := p.genChildEnv()
+	c, _ := json.Marshal(p.mainCtx)
 	for i := 0; i < runtime.NumCPU(); i++ {
 		cmd := NewCommand(ctx, p.binary)
 		cmd.ExtraFiles = p.socketFiles
 		cmd.Env = append(p.env, env...)
 		if err := cmd.Run(); err != nil {
+			return err
+		}
+		// We are sending configuration to the child process
+		if err := cmd.WriteMSG(Msg{
+			PID:  p.pid,
+			Kind: KindConfigContext,
+			Body: c,
+		}); err != nil {
 			return err
 		}
 		go p.monitorCommandEvents(ctx, cmd)
@@ -210,9 +237,14 @@ func (p *Process) handleEvents(ctx context.Context) {
 	}
 }
 
-// Run starts children process if this is the main process and listens for
-// control signals.
 func (p *Process) Run(baseCtx context.Context) error {
+	if p.main {
+		return p.runMain(baseCtx)
+	}
+	return p.runChild(baseCtx)
+}
+
+func (p *Process) runMain(baseCtx context.Context) error {
 	ctx, cancel := context.WithCancel(baseCtx)
 	defer cancel()
 	configFile, err := nginxFile()
@@ -232,17 +264,13 @@ func (p *Process) Run(baseCtx context.Context) error {
 	if err := p.mainCtx.check(); err != nil {
 		return err
 	}
-	ctx = context.WithValue(ctx, errLogInfo{}, &p.mainCtx.errorLog)
+	ctx = context.WithValue(ctx, errLogInfo{}, &p.mainCtx.ErrorLog)
 
 	defer func() {
 		p.releaseResources(ctx)
 	}()
 	lg := log(ctx)
-	if p.main {
-		lg.Info("Start main process", zap.Int("pid", p.pid))
-	} else {
-		lg.Info("Start child process", zap.Int("pid", p.pid))
-	}
+	lg.Info("Start main process", zap.Int("pid", p.pid))
 	if err := p.WritePID(); err != nil {
 		return err
 	}
@@ -312,6 +340,85 @@ func (p *Process) Run(baseCtx context.Context) error {
 	}
 }
 
+func (p *Process) runChild(baseCtx context.Context) error {
+	ctx, cancel := context.WithCancel(baseCtx)
+	defer cancel()
+
+	if err := p.receiveConfigFromMain(ctx); err != nil {
+		return err
+	}
+
+	if err := p.mainCtx.check(); err != nil {
+		return err
+	}
+	ctx = context.WithValue(ctx, errLogInfo{}, &p.mainCtx.ErrorLog)
+
+	defer func() {
+		p.releaseResources(ctx)
+	}()
+	lg := log(ctx)
+	lg.Info("Start child process", zap.Int("pid", p.pid))
+
+	if err := p.manageSockets(ctx); err != nil {
+		return err
+	}
+	go p.handleEvents(ctx)
+
+	// start servers that listen on registered sockets
+	if err := p.manageServers(ctx); err != nil {
+		return err
+	}
+	go p.manageChildProcessStats(ctx)
+
+	ch := make(chan os.Signal, 2)
+	signal.Notify(
+		ch,
+		syscall.SIGTERM,
+		syscall.SIGINT,
+		syscall.SIGHUP,
+		syscall.SIGQUIT,
+		syscall.SIGUSR1,
+		syscall.SIGUSR2,
+		syscall.SIGWINCH,
+	)
+	for {
+		sig := <-ch
+		switch sig {
+		case syscall.SIGTERM, syscall.SIGINT:
+			lg.Debug("fast shutdown")
+			return p.FastClose(ctx)
+		case syscall.SIGQUIT:
+			lg.Debug("graceful shutdown")
+			return p.Graceful(ctx)
+		case syscall.SIGHUP:
+			lg.Debug("reload configuration")
+		case syscall.SIGUSR1:
+			lg.Debug("reopening log files")
+		case syscall.SIGUSR2:
+			lg.Debug("upgrading an executable files")
+		case syscall.SIGWINCH:
+			lg.Debug("graceful shutdown of worker process")
+			if p.main {
+				// we send the signal to worker process
+				for _, ch := range p.children {
+					if err := ch.Signal(syscall.SIGUSR2); err != nil {
+						lg.Error("Sending signal to child process",
+							zap.String("signal", sig.String()),
+							zap.Int("pid", ch.PID()),
+							zap.Error(err),
+						)
+					}
+				}
+				// we are not exiting this loop since the main process remains operational.
+			} else {
+				return p.Graceful(ctx)
+			}
+		default:
+			lg.Debug("received unknown signal ", zap.String("signal", sig.String()))
+		}
+	}
+}
+
 // WritePID creates apid file if this is a main process. If there is already a
 // pid file then it it will be renamed with .old extension and then overwritten
 // with the new value.
@@ -320,13 +427,13 @@ func (p *Process) WritePID() error {
 		return nil
 	}
 	pid := strconv.FormatInt(int64(p.pid), 10)
-	if _, err := os.Stat(p.mainCtx.pid); err == nil {
-		err = os.Rename(p.mainCtx.pid, p.mainCtx.pid+".old")
+	if _, err := os.Stat(p.mainCtx.PID); err == nil {
+		err = os.Rename(p.mainCtx.PID, p.mainCtx.PID+".old")
 		if err != nil {
 			return err
 		}
 	}
-	return ioutil.WriteFile(p.mainCtx.pid, []byte(pid), 0600)
+	return ioutil.WriteFile(p.mainCtx.PID, []byte(pid), 0600)
 }
 
 // Close sends kill signal to all child process and exits
@@ -442,6 +549,7 @@ type MsgKind uint
 const (
 	KindChildConnStat MsgKind = 1 + iota
 	KindMainConnStat
+	KindConfigContext
 )
 
 type Msg struct {
@@ -524,32 +632,41 @@ func (p *Process) manageStats(ctx context.Context) {
 	tick := time.NewTicker(p.heartBeat)
 	defer tick.Stop()
 	lg := log(ctx)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+			// We send total connection stats to all child process. It is important to
+			// make sure the messages are delivered
+			//
+			// Total is reset to 0 as we are countint total connections stats for the
+			// next tick.
+			total := p.total.Reset()
+			b, _ := json.Marshal(total)
+			m := Msg{PID: p.pid, Kind: KindMainConnStat, Body: b}
+			for _, w := range p.children {
+				if err := w.WriteMSG(m); err != nil {
+					lg.Error("Writing ", zap.Error(err))
+				}
+			}
+			lg.Sugar().Infof("%#v\n", total)
+		}
+	}
+}
+
+func (p *Process) manageChildProcessStats(ctx context.Context) {
+	tick := time.NewTicker(p.heartBeat)
+	defer tick.Stop()
 	enc := json.NewEncoder(os.Stdout)
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-tick.C:
-			if p.main {
-				// We send total connection stats to all child process. It is important to
-				// make sure the messages are delivered
-				//
-				// Total is reset to 0 as we are countint total connections stats for the
-				// next tick.
-				total := p.total.Reset()
-				b, _ := json.Marshal(total)
-				m := Msg{PID: p.pid, Kind: KindMainConnStat, Body: b}
-				for _, w := range p.children {
-					if err := w.WriteMSG(m); err != nil {
-						lg.Error("Writing ", zap.Error(err))
-					}
-				}
-				lg.Sugar().Infof("%#v\n", total)
-			} else {
-				b, _ := json.Marshal(p.connManager.GetStatus())
-				m := Msg{PID: p.pid, Kind: KindChildConnStat, Body: b}
-				enc.Encode(&m)
-			}
+			b, _ := json.Marshal(p.connManager.GetStatus())
+			m := Msg{PID: p.pid, Kind: KindChildConnStat, Body: b}
+			enc.Encode(&m)
 		}
 	}
 }

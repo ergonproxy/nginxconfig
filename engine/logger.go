@@ -106,7 +106,6 @@ func (msg MsgEncoder) EncodeEntry(entry zapcore.Entry, fields []zapcore.Field) (
 			a = append(a, fields[i])
 		}
 	}
-	f = "error.log"
 	if f != "" {
 		buf, err := msg.enc.EncodeEntry(entry, a)
 		if err != nil {
