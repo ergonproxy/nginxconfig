@@ -448,6 +448,7 @@ func (s *Scanner) isSpecial(ch rune) bool {
 // token errors) by calling s.Error, if not nil; otherwise it prints an error
 // message to os.Stderr.
 func (s *Scanner) Scan() rune {
+scanAgain:
 	ch := s.Peek()
 
 	// reset token text position
@@ -494,7 +495,7 @@ func (s *Scanner) Scan() rune {
 	case '#':
 		ch = s.next()
 		ch = s.scanComment()
-		tok = Comment
+		goto scanAgain
 	case '{':
 		ch = s.next()
 		tok = LBrace
