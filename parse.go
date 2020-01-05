@@ -1,14 +1,12 @@
 package main
 
-import "io"
-
-import "strings"
-
-import "path/filepath"
-
-import "os"
-
-import "sort"
+import (
+	"io"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+)
 
 type Stmt struct {
 	Directive string
@@ -33,16 +31,6 @@ func (t *tokenIter) next() (*token, error) {
 	return nil, io.EOF
 }
 
-type parser struct {
-	combine   bool
-	comments  bool
-	ignore    func(string) bool
-	includes  []fileCtx
-	included  map[string]int
-	single    bool
-	configDir string
-}
-
 type fileCtx struct {
 	name string
 	ctx  []string
@@ -53,9 +41,16 @@ type parsingContext struct {
 	status string
 	errors []error
 	parsed []*Stmt
+	opts   *parseOpts
 }
 
-func (p *parser) parseInternal(parsing *parsingContext, tokens *tokenIter, ctx []string, consume bool) []*Stmt {
+type payload struct {
+	status string
+	errors []error
+	config []*parsingContext
+}
+
+func parseInternal(parsing *parsingContext, tokens *tokenIter, ctx []string, consume bool) []*Stmt {
 	var parsed []*Stmt
 	for {
 		token, err := tokens.next()
@@ -68,13 +63,13 @@ func (p *parser) parseInternal(parsing *parsingContext, tokens *tokenIter, ctx [
 		}
 		if consume {
 			if token.text == "{" && !token.quote {
-				p.parseInternal(parsing, tokens, nil, true)
+				parseInternal(parsing, tokens, nil, true)
 				continue
 			}
 		}
 		directive := token.text
 		var stmt *Stmt
-		if p.combine {
+		if parsing.opts.combine {
 			stmt = &Stmt{
 				Filename:  parsing.file,
 				Directive: directive,
@@ -87,7 +82,7 @@ func (p *parser) parseInternal(parsing *parsingContext, tokens *tokenIter, ctx [
 			}
 		}
 		if len(directive) > 0 && directive[0] == '#' && !token.quote {
-			if p.comments {
+			if parsing.opts.comments {
 				stmt.Directive = "#"
 				stmt.Comment = token.text[1:]
 				parsed = append(parsed, stmt)
@@ -103,9 +98,9 @@ func (p *parser) parseInternal(parsing *parsingContext, tokens *tokenIter, ctx [
 			}
 			token, err = tokens.next()
 		}
-		if p.ignore != nil && p.ignore(stmt.Directive) {
+		if parsing.opts.ignore != nil && parsing.opts.ignore(stmt.Directive) {
 			if token.text == "{" && !token.quote {
-				p.parseInternal(parsing, tokens, nil, true)
+				parseInternal(parsing, tokens, nil, true)
 			}
 			continue
 		}
@@ -113,15 +108,16 @@ func (p *parser) parseInternal(parsing *parsingContext, tokens *tokenIter, ctx [
 			prepareIfArgs(stmt)
 		}
 		// TODO call analyze
-		if !p.single && stmt.Directive == "include" {
+		if !parsing.opts.single && stmt.Directive == "include" {
 			pattern := stmt.Args[0]
 			if !filepath.IsAbs(pattern) {
-				pattern = filepath.Join(p.configDir, pattern)
+				pattern = filepath.Join(parsing.opts.configDir, pattern)
 			}
 			var fnames []string
 			if strings.Contains(pattern, "*") {
 				n, ferr := filepath.Glob(pattern)
 				if err != nil {
+					parsing.status = "failed"
 					parsing.errors = append(
 						parsing.errors,
 						&NgxError{
@@ -138,6 +134,7 @@ func (p *parser) parseInternal(parsing *parsingContext, tokens *tokenIter, ctx [
 				f, ferr := os.Open(pattern)
 				n, ferr := filepath.Glob(pattern)
 				if err != nil {
+					parsing.status = "failed"
 					parsing.errors = append(
 						parsing.errors,
 						&NgxError{
@@ -152,15 +149,15 @@ func (p *parser) parseInternal(parsing *parsingContext, tokens *tokenIter, ctx [
 				f.Close()
 			}
 			for _, name := range fnames {
-				p.included[name] = len(p.includes)
-				p.includes = append(p.includes, fileCtx{
+				parsing.opts.included[name] = len(parsing.opts.includes)
+				parsing.opts.includes = append(parsing.opts.includes, fileCtx{
 					name: name,
 					ctx:  ctx,
 				})
-				stmt.Includes = append(stmt.Includes, p.included[name])
+				stmt.Includes = append(stmt.Includes, parsing.opts.included[name])
 			}
 			if token.text == "{" && !token.quote {
-				stmt.Blocks = p.parseInternal(
+				stmt.Blocks = parseInternal(
 					parsing, tokens,
 					enterBlock(stmt, ctx),
 					false,
@@ -177,6 +174,72 @@ func (p *parser) parseInternal(parsing *parsingContext, tokens *tokenIter, ctx [
 		}
 	}
 	return parsed
+}
+
+type parseOpts struct {
+	checkErr  bool
+	ignore    func(string) bool
+	single    bool
+	comments  bool
+	combine   bool
+	checkCtx  bool
+	configDir string
+	includes  []fileCtx
+	included  map[string]int
+}
+
+type includeIter struct {
+	opts *parseOpts
+	idx  int
+}
+
+func (i *includeIter) next() *fileCtx {
+	if i.idx < len(i.opts.includes) {
+		i.idx++
+		return &i.opts.includes[i.idx-1]
+	}
+	return nil
+}
+
+func parse(filename string, opts *parseOpts) *payload {
+	opts.configDir = filepath.Dir(filename)
+	opts.includes = append(opts.includes, fileCtx{name: filename})
+	opts.included = map[string]int{
+		"filename": 0,
+	}
+	pld := &payload{
+		status: "ok",
+	}
+	it := &includeIter{opts: opts}
+	for f := it.next(); f != nil; f = it.next() {
+		parsing, err := parseInclude(opts, f)
+		if err != nil {
+			pld.status = "failed"
+			pld.errors = append(pld.errors, err)
+		}
+		pld.config = append(pld.config, parsing)
+	}
+	return pld
+}
+
+func parseInclude(opts *parseOpts, f *fileCtx) (*parsingContext, error) {
+	parsing := &parsingContext{
+		file:   f.name,
+		status: "ok",
+		opts:   opts,
+	}
+	fs, err := os.Open(f.name)
+	if err != nil {
+		return nil, err
+	}
+	defer fs.Close()
+	tokens, err := lex(fs, f.name)
+	if err != nil {
+		return nil, err
+	}
+	it := &tokenIter{tokens: tokens}
+	parsing.parsed = parseInternal(parsing, it, f.ctx, false)
+	return parsing, nil
 }
 
 func enterBlock(stmt *Stmt, ctx []string) []string {
@@ -202,4 +265,43 @@ func prepareIfArgs(stmt *Stmt) {
 		}
 		stmt.Args = stmt.Args[:n]
 	}
+}
+
+func combineParsedConfig(opts *parseOpts, p *payload) *payload {
+	combine := &parsingContext{
+		file:   p.config[0].file,
+		status: "ok",
+		opts:   opts,
+	}
+	for _, c := range p.config {
+		combine.errors = append(combine.errors, c.errors...)
+		if c.status == "failed" {
+			combine.status = "failed"
+		}
+	}
+	combine.parsed = performInclude(p, p.config[0].parsed)
+	return &payload{
+		status: p.status,
+		errors: p.errors,
+		config: []*parsingContext{combine},
+	}
+}
+
+func performInclude(p *payload, block []*Stmt) []*Stmt {
+	var o []*Stmt
+	for _, stmt := range block {
+		if stmt.Blocks != nil {
+			stmt.Blocks = performInclude(p, stmt.Blocks)
+		}
+		if stmt.Includes != nil {
+			for _, idx := range stmt.Includes {
+				for _, v := range performInclude(p, p.config[idx].parsed) {
+					o = append(o, v)
+				}
+			}
+		} else {
+			o = append(o, stmt)
+		}
+	}
+	return o
 }
