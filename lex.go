@@ -17,6 +17,18 @@ func (n NgxError) Error() string {
 	return fmt.Sprintf("%s:%d %s", n.Filename, n.Linenum, n.Reason)
 }
 
+type NgxParserDirectiveUnknownError struct {
+	NgxError
+}
+
+type NgxParserDirectiveContextError struct {
+	NgxError
+}
+
+type NgxParserDirectiveArgumentsError struct {
+	NgxError
+}
+
 type Iter interface {
 	Next() (rune, error)
 }
