@@ -13,6 +13,10 @@ type NgxError struct {
 	Filename string
 }
 
+func newError(reason string, line int, fname string) NgxError {
+	return NgxError{Reason: reason, Linenum: line, Filename: fname}
+}
+
 func (n NgxError) Error() string {
 	return fmt.Sprintf("%s:%d %s", n.Filename, n.Linenum, n.Reason)
 }

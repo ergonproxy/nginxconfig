@@ -107,7 +107,11 @@ func parseInternal(parsing *parsingContext, tokens *tokenIter, ctx []string, con
 		if stmt.Directive == "if" {
 			prepareIfArgs(stmt)
 		}
-		// TODO call analyze
+		aerr := analyze(parsing.file, stmt, token.text, ctx, parsing.opts.strict, parsing.opts.checkCtx, parsing.opts.checkArgs)
+		if aerr != nil {
+			parsing.status = "failed"
+			parsing.errors = append(parsing.errors, aerr)
+		}
 		if !parsing.opts.single && stmt.Directive == "include" {
 			pattern := stmt.Args[0]
 			if !filepath.IsAbs(pattern) {
@@ -177,12 +181,14 @@ func parseInternal(parsing *parsingContext, tokens *tokenIter, ctx []string, con
 }
 
 type parseOpts struct {
-	checkErr  bool
+	catchErr  bool
 	ignore    func(string) bool
 	single    bool
+	strict    bool
 	comments  bool
 	combine   bool
 	checkCtx  bool
+	checkArgs bool
 	configDir string
 	includes  []fileCtx
 	included  map[string]int
