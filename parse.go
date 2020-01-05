@@ -194,6 +194,15 @@ type parseOpts struct {
 	included  map[string]int
 }
 
+func defaultParseOpts() *parseOpts {
+	return &parseOpts{
+		catchErr:  true,
+		ignore:    func(_ string) bool { return false },
+		checkCtx:  true,
+		checkArgs: true,
+	}
+}
+
 type includeIter struct {
 	opts *parseOpts
 	idx  int
