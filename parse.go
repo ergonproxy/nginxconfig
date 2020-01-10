@@ -85,7 +85,7 @@ func parseInternal(parsing *parsingContext, tokens *tokenIter, ctx []string, con
 			continue
 		}
 		token = tokens.next()
-		for (token.text == "{" || token.text == ";" || token.text == "}") && !token.quote {
+		for inDirArgs(token) {
 			if len(token.text) > 0 && token.text[0] == '#' && !token.quote {
 				commentsInArgs = append(commentsInArgs, token.text[1:])
 			} else {
@@ -173,6 +173,19 @@ func parseInternal(parsing *parsingContext, tokens *tokenIter, ctx []string, con
 		}
 	}
 	return parsed
+}
+
+func inDirArgs(tok *token) bool {
+	return checkTerminal(tok.text) || tok.quote
+}
+
+func checkTerminal(txt string) bool {
+	switch txt {
+	case "{", ";", "}":
+		return true
+	default:
+		return false
+	}
 }
 
 type parseOpts struct {
