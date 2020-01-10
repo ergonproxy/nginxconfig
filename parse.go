@@ -36,22 +36,25 @@ type fileCtx struct {
 }
 
 type parsingContext struct {
-	file   string
-	status string
+	File   string
+	Status string
 	Errors []error
-	parsed []*Stmt
+	Parsed []*Stmt
 	opts   *parseOpts
 }
 
 func (p *parsingContext) handleErr(err error) {
-	p.status = "failed"
+	if p.opts.errHandler != nil {
+		p.opts.errHandler(err)
+	}
+	p.Status = "failed"
 	p.Errors = append(p.Errors, err)
 }
 
 type payload struct {
-	status string
-	errors []error
-	config []*parsingContext
+	Status string
+	Errors []error
+	Config []*parsingContext
 }
 
 func parseInternal(parsing *parsingContext, tokens *tokenIter, ctx []string, consume bool) []*Stmt {
@@ -71,7 +74,7 @@ func parseInternal(parsing *parsingContext, tokens *tokenIter, ctx []string, con
 		var stmt *Stmt
 		if parsing.opts.combine {
 			stmt = &Stmt{
-				Filename:  parsing.file,
+				Filename:  parsing.File,
 				Directive: directive,
 				Line:      token.line,
 			}
@@ -107,7 +110,7 @@ func parseInternal(parsing *parsingContext, tokens *tokenIter, ctx []string, con
 		if stmt.Directive == "if" {
 			prepareIfArgs(stmt)
 		}
-		err := analyze(parsing.file, stmt, token.text, ctx, parsing.opts.strict, parsing.opts.checkCtx, parsing.opts.checkArgs)
+		err := analyze(parsing.File, stmt, token.text, ctx, parsing.opts.strict, parsing.opts.checkCtx, parsing.opts.checkArgs)
 		if err != nil {
 			parsing.handleErr(err)
 		}
@@ -124,7 +127,7 @@ func parseInternal(parsing *parsingContext, tokens *tokenIter, ctx []string, con
 						&NgxError{
 							Reason:   err.Error(),
 							Linenum:  stmt.Line,
-							Filename: parsing.file,
+							Filename: parsing.File,
 						},
 					)
 				} else {
@@ -138,7 +141,7 @@ func parseInternal(parsing *parsingContext, tokens *tokenIter, ctx []string, con
 						&NgxError{
 							Reason:   err.Error(),
 							Linenum:  stmt.Line,
-							Filename: parsing.file,
+							Filename: parsing.File,
 						},
 					)
 				} else {
@@ -148,7 +151,7 @@ func parseInternal(parsing *parsingContext, tokens *tokenIter, ctx []string, con
 							&NgxError{
 								Reason:   err.Error(),
 								Linenum:  stmt.Line,
-								Filename: parsing.file,
+								Filename: parsing.File,
 							},
 						)
 					} else {
@@ -187,7 +190,7 @@ func parseInternal(parsing *parsingContext, tokens *tokenIter, ctx []string, con
 }
 
 func inDirArgs(tok *token) bool {
-	return checkTerminal(tok.text) || tok.quote
+	return !checkTerminal(tok.text) || tok.quote
 }
 
 func checkTerminal(txt string) bool {
@@ -200,17 +203,18 @@ func checkTerminal(txt string) bool {
 }
 
 type parseOpts struct {
-	catchErr  bool
-	ignore    func(string) bool
-	single    bool
-	strict    bool
-	comments  bool
-	combine   bool
-	checkCtx  bool
-	checkArgs bool
-	configDir string
-	includes  []fileCtx
-	included  map[string]int
+	catchErr   bool
+	ignore     func(string) bool
+	single     bool
+	strict     bool
+	comments   bool
+	combine    bool
+	checkCtx   bool
+	checkArgs  bool
+	configDir  string
+	includes   []fileCtx
+	included   map[string]int
+	errHandler func(error)
 }
 
 func defaultParseOpts() *parseOpts {
@@ -242,24 +246,28 @@ func parse(filename string, opts *parseOpts) *payload {
 		"filename": 0,
 	}
 	pld := &payload{
-		status: "ok",
+		Status: "ok",
+	}
+	opts.errHandler = func(err error) {
+		pld.Status = "failed"
+		pld.Errors = append(pld.Errors, err)
 	}
 	it := &includeIter{opts: opts}
 	for f := it.next(); f != nil; f = it.next() {
 		parsing, err := parseInclude(opts, f)
 		if err != nil {
-			pld.status = "failed"
-			pld.errors = append(pld.errors, err)
+			pld.Status = "failed"
+			pld.Errors = append(pld.Errors, err)
 		}
-		pld.config = append(pld.config, parsing)
+		pld.Config = append(pld.Config, parsing)
 	}
 	return pld
 }
 
 func parseInclude(opts *parseOpts, f *fileCtx) (*parsingContext, error) {
 	parsing := &parsingContext{
-		file:   f.name,
-		status: "ok",
+		File:   f.name,
+		Status: "ok",
 		opts:   opts,
 	}
 	fs, err := os.Open(f.name)
@@ -272,7 +280,7 @@ func parseInclude(opts *parseOpts, f *fileCtx) (*parsingContext, error) {
 		return nil, err
 	}
 	it := &tokenIter{tokens: tokens}
-	parsing.parsed = parseInternal(parsing, it, f.ctx, false)
+	parsing.Parsed = parseInternal(parsing, it, f.ctx, false)
 	return parsing, nil
 }
 
@@ -303,21 +311,21 @@ func prepareIfArgs(stmt *Stmt) {
 
 func combineParsedConfig(opts *parseOpts, p *payload) *payload {
 	combine := &parsingContext{
-		file:   p.config[0].file,
-		status: "ok",
+		File:   p.Config[0].File,
+		Status: "ok",
 		opts:   opts,
 	}
-	for _, c := range p.config {
+	for _, c := range p.Config {
 		combine.Errors = append(combine.Errors, c.Errors...)
-		if c.status == "failed" {
-			combine.status = "failed"
+		if c.Status == "failed" {
+			combine.Status = "failed"
 		}
 	}
-	combine.parsed = performInclude(p, p.config[0].parsed)
+	combine.Parsed = performInclude(p, p.Config[0].Parsed)
 	return &payload{
-		status: p.status,
-		errors: p.errors,
-		config: []*parsingContext{combine},
+		Status: p.Status,
+		Errors: p.Errors,
+		Config: []*parsingContext{combine},
 	}
 }
 
@@ -329,7 +337,7 @@ func performInclude(p *payload, block []*Stmt) []*Stmt {
 		}
 		if stmt.Includes != nil {
 			for _, idx := range stmt.Includes {
-				for _, v := range performInclude(p, p.config[idx].parsed) {
+				for _, v := range performInclude(p, p.Config[idx].Parsed) {
 					o = append(o, v)
 				}
 			}
