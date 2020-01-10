@@ -38,9 +38,14 @@ type fileCtx struct {
 type parsingContext struct {
 	file   string
 	status string
-	errors []error
+	Errors []error
 	parsed []*Stmt
 	opts   *parseOpts
+}
+
+func (p *parsingContext) handleErr(err error) {
+	p.status = "failed"
+	p.Errors = append(p.Errors, err)
 }
 
 type payload struct {
@@ -102,10 +107,9 @@ func parseInternal(parsing *parsingContext, tokens *tokenIter, ctx []string, con
 		if stmt.Directive == "if" {
 			prepareIfArgs(stmt)
 		}
-		aerr := analyze(parsing.file, stmt, token.text, ctx, parsing.opts.strict, parsing.opts.checkCtx, parsing.opts.checkArgs)
-		if aerr != nil {
-			parsing.status = "failed"
-			parsing.errors = append(parsing.errors, aerr)
+		err := analyze(parsing.file, stmt, token.text, ctx, parsing.opts.strict, parsing.opts.checkCtx, parsing.opts.checkArgs)
+		if err != nil {
+			parsing.handleErr(err)
 		}
 		if !parsing.opts.single && stmt.Directive == "include" {
 			pattern := stmt.Args[0]
@@ -117,8 +121,7 @@ func parseInternal(parsing *parsingContext, tokens *tokenIter, ctx []string, con
 				n, ferr := filepath.Glob(pattern)
 				if ferr != nil {
 					parsing.status = "failed"
-					parsing.errors = append(
-						parsing.errors,
+					parsing.handleErr(
 						&NgxError{
 							Reason:   ferr.Error(),
 							Linenum:  stmt.Line,
@@ -134,8 +137,7 @@ func parseInternal(parsing *parsingContext, tokens *tokenIter, ctx []string, con
 				n, ferr := filepath.Glob(pattern)
 				if ferr != nil {
 					parsing.status = "failed"
-					parsing.errors = append(
-						parsing.errors,
+					parsing.handleErr(
 						&NgxError{
 							Reason:   ferr.Error(),
 							Linenum:  stmt.Line,
@@ -297,7 +299,7 @@ func combineParsedConfig(opts *parseOpts, p *payload) *payload {
 		opts:   opts,
 	}
 	for _, c := range p.config {
-		combine.errors = append(combine.errors, c.errors...)
+		combine.Errors = append(combine.Errors, c.Errors...)
 		if c.status == "failed" {
 			combine.status = "failed"
 		}
