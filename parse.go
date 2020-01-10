@@ -1,7 +1,6 @@
 package main
 
 import (
-	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -23,12 +22,12 @@ type tokenIter struct {
 	idx    int
 }
 
-func (t *tokenIter) next() (*token, error) {
+func (t *tokenIter) next() *token {
 	if t.idx < len(t.tokens) {
 		t.idx++
-		return &t.tokens[t.idx-1], nil
+		return &t.tokens[t.idx-1]
 	}
-	return nil, io.EOF
+	return nil
 }
 
 type fileCtx struct {
@@ -52,11 +51,7 @@ type payload struct {
 
 func parseInternal(parsing *parsingContext, tokens *tokenIter, ctx []string, consume bool) []*Stmt {
 	var parsed []*Stmt
-	for {
-		token, err := tokens.next()
-		if err != nil {
-			break
-		}
+	for token := tokens.next(); token != nil; token = tokens.next() {
 		var commentsInArgs []string
 		if token.text == "}" && !token.quote {
 			break
@@ -89,14 +84,14 @@ func parseInternal(parsing *parsingContext, tokens *tokenIter, ctx []string, con
 			}
 			continue
 		}
-		token, err = tokens.next()
+		token = tokens.next()
 		for (token.text == "{" || token.text == ";" || token.text == "}") && !token.quote {
 			if len(token.text) > 0 && token.text[0] == '#' && !token.quote {
 				commentsInArgs = append(commentsInArgs, token.text[1:])
 			} else {
 				stmt.Args = append(stmt.Args, token.text)
 			}
-			token, err = tokens.next()
+			token = tokens.next()
 		}
 		if parsing.opts.ignore != nil && parsing.opts.ignore(stmt.Directive) {
 			if token.text == "{" && !token.quote {
@@ -120,7 +115,7 @@ func parseInternal(parsing *parsingContext, tokens *tokenIter, ctx []string, con
 			var fnames []string
 			if strings.Contains(pattern, "*") {
 				n, ferr := filepath.Glob(pattern)
-				if err != nil {
+				if ferr != nil {
 					parsing.status = "failed"
 					parsing.errors = append(
 						parsing.errors,
@@ -137,7 +132,7 @@ func parseInternal(parsing *parsingContext, tokens *tokenIter, ctx []string, con
 			} else {
 				f, ferr := os.Open(pattern)
 				n, ferr := filepath.Glob(pattern)
-				if err != nil {
+				if ferr != nil {
 					parsing.status = "failed"
 					parsing.errors = append(
 						parsing.errors,
