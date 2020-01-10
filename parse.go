@@ -118,12 +118,11 @@ func parseInternal(parsing *parsingContext, tokens *tokenIter, ctx []string, con
 			}
 			var fnames []string
 			if strings.Contains(pattern, "*") {
-				n, ferr := filepath.Glob(pattern)
-				if ferr != nil {
-					parsing.status = "failed"
+				n, err := filepath.Glob(pattern)
+				if err != nil {
 					parsing.handleErr(
 						&NgxError{
-							Reason:   ferr.Error(),
+							Reason:   err.Error(),
 							Linenum:  stmt.Line,
 							Filename: parsing.file,
 						},
@@ -133,21 +132,31 @@ func parseInternal(parsing *parsingContext, tokens *tokenIter, ctx []string, con
 					sort.Strings(fnames)
 				}
 			} else {
-				f, ferr := os.Open(pattern)
-				n, ferr := filepath.Glob(pattern)
-				if ferr != nil {
-					parsing.status = "failed"
+				f, err := os.Open(pattern)
+				if err != nil {
 					parsing.handleErr(
 						&NgxError{
-							Reason:   ferr.Error(),
+							Reason:   err.Error(),
 							Linenum:  stmt.Line,
 							Filename: parsing.file,
 						},
 					)
 				} else {
-					fnames = n
+					n, err := filepath.Glob(pattern)
+					if err != nil {
+						parsing.handleErr(
+							&NgxError{
+								Reason:   err.Error(),
+								Linenum:  stmt.Line,
+								Filename: parsing.file,
+							},
+						)
+					} else {
+						fnames = n
+					}
+					f.Close()
 				}
-				f.Close()
+
 			}
 			for _, name := range fnames {
 				parsing.opts.included[name] = len(parsing.opts.includes)
@@ -157,21 +166,21 @@ func parseInternal(parsing *parsingContext, tokens *tokenIter, ctx []string, con
 				})
 				stmt.Includes = append(stmt.Includes, parsing.opts.included[name])
 			}
-			if token.text == "{" && !token.quote {
-				stmt.Blocks = parseInternal(
-					parsing, tokens,
-					enterBlock(stmt, ctx),
-					false,
-				)
-			}
-			parsed = append(parsed, stmt)
-			for _, comment := range commentsInArgs {
-				parsed = append(parsed, &Stmt{
-					Directive: "#",
-					Line:      stmt.Line,
-					Comment:   comment,
-				})
-			}
+		}
+		if token.text == "{" && !token.quote {
+			stmt.Blocks = parseInternal(
+				parsing, tokens,
+				enterBlock(stmt, ctx),
+				false,
+			)
+		}
+		parsed = append(parsed, stmt)
+		for _, comment := range commentsInArgs {
+			parsed = append(parsed, &Stmt{
+				Directive: "#",
+				Line:      stmt.Line,
+				Comment:   comment,
+			})
 		}
 	}
 	return parsed
