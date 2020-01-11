@@ -150,10 +150,22 @@ func build(buf *strings.Builder, p []*Stmt, indent int, header bool) {
 		# https://github.com/nginxinc/crossplane/issues
 		`)
 	}
-	buildBlock(buf, p, indent, 0, 0)
+	buildBlock(buf, defaultCustomBuilder(), p, indent, 0, 0)
 }
 
-func buildBlock(buf *strings.Builder, block []*Stmt, padding int, depth, lastLine int) {
+type customBuilder interface {
+	build(buf *strings.Builder, stmt *Stmt, padding, depth int)
+}
+
+func defaultCustomBuilder() map[string]customBuilder {
+	lua := luaLexer{}
+	m := make(map[string]customBuilder)
+	for _, directive := range lua.directives() {
+		m[directive] = lua
+	}
+	return m
+}
+func buildBlock(buf *strings.Builder, custom map[string]customBuilder, block []*Stmt, padding int, depth, lastLine int) {
 	built := new(strings.Builder)
 	padBuild := func() {
 		margin(built, padding, depth)
@@ -171,6 +183,8 @@ func buildBlock(buf *strings.Builder, block []*Stmt, padding int, depth, lastLin
 		} else if directive == "#" {
 			built.WriteRune('#')
 			built.WriteString(stmt.Comment)
+		} else if c, ok := custom[directive]; ok {
+			c.build(built, stmt, padding, depth)
 		} else {
 			var args []string
 			if len(stmt.Args) > 0 {
@@ -189,7 +203,7 @@ func buildBlock(buf *strings.Builder, block []*Stmt, padding int, depth, lastLin
 			}
 			if len(stmt.Blocks) > 0 {
 				built.WriteString(" {")
-				buildBlock(built, stmt.Blocks, padding, depth+1, stmt.Line)
+				buildBlock(built, custom, stmt.Blocks, padding, depth+1, stmt.Line)
 				built.WriteRune('\n')
 				padBuild()
 				buf.WriteRune('}')
