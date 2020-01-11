@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"strings"
 	"unicode"
 )
 
@@ -77,7 +78,12 @@ type token struct {
 }
 
 func defaultCustomLexers() map[string]customLexer {
-	return map[string]customLexer{}
+	lua := luaLexer{}
+	m := map[string]customLexer{}
+	for _, directive := range lua.directives() {
+		m[directive] = lua
+	}
+	return m
 }
 
 func newLexer(iter Iter, custom map[string]customLexer) *lexer {
@@ -261,4 +267,126 @@ func lex(rd io.Reader, filename string) ([]token, error) {
 		return nil, err
 	}
 	return lx.tokens, nil
+}
+
+var _ customLexer = luaLexer{}
+
+type luaLexer struct{}
+
+func (luaLexer) directives() []string {
+	return []string{
+		"access_by_lua_block",
+		"balancer_by_lua_block",
+		"body_filter_by_lua_block",
+		"content_by_lua_block",
+		"header_filter_by_lua_block",
+		"init_by_lua_block",
+		"init_worker_by_lua_block",
+		"log_by_lua_block",
+		"rewrite_by_lua_block",
+		"set_by_lua_block",
+		"ssl_certificate_by_lua_block",
+		"ssl_session_fetch_by_lua_block",
+		"ssl_session_store_by_lua_block",
+	}
+}
+
+func (luaLexer) lex(it IterLine, directive string) (tok []token, err error) {
+	if directive == "set_by_lua_block" {
+		var arg string
+		for ch, line, err := it.Next(); err == nil; ch, line, err = it.Next() {
+			if unicode.IsSpace(ch) {
+				if arg != "" {
+					tok = append(tok, token{
+						text: arg,
+						line: line,
+					})
+				} else {
+					for unicode.IsSpace(ch) {
+						ch, line, err = it.Next()
+					}
+				}
+			}
+			arg += string(ch)
+		}
+	}
+
+	ch, line, err := consumeSpace(it)
+	if err != nil {
+		return nil, err
+	}
+	if ch != '{' {
+		return nil, &NgxError{
+			Reason:  "expected { to start Lua block",
+			Linenum: line,
+		}
+	}
+	var depth int
+	var tk string
+	depth++
+	for ch, line, err = it.Next(); err == nil; ch, line, err = it.Next() {
+		switch ch {
+		case '{':
+			depth++
+		case '}':
+			depth--
+		case '"', '\'':
+			quote := ch
+			tk += string(ch)
+			ch, line, err = it.Next()
+			for ch != quote {
+				if ch == quote {
+					tk += string(quote)
+				} else {
+					tk += string(ch)
+				}
+				ch, line, err = it.Next()
+			}
+		}
+		if depth < 0 {
+			return nil, &NgxError{
+				Reason:  "unexpected }",
+				Linenum: line,
+			}
+		}
+		if depth == 0 {
+			tok = append(tok, token{
+				text: tk,
+				line: line,
+			})
+			tok = append(tok, token{
+				text: ";",
+				line: line,
+			})
+			break
+		}
+		tk += string(ch)
+	}
+	return nil, nil
+}
+
+func consumeSpace(it IterLine) (ch rune, line int, err error) {
+	for ch, line, err = it.Next(); unicode.IsSpace(ch); ch, line, err = it.Next() {
+	}
+	return
+}
+
+func (luaLexer) build(buf *strings.Builder, stmt *Stmt, padding, depth int) {
+	buf.WriteString(stmt.Directive)
+	if stmt.Directive == "set_by_lua_block" {
+		if len(stmt.Args) > 0 {
+			buf.WriteString(" " + stmt.Args[0])
+		}
+		if len(stmt.Args) > 1 {
+			buf.WriteString(" {")
+			buf.WriteString(stmt.Args[1])
+			buf.WriteRune('}')
+		}
+	} else {
+		if len(stmt.Args) > 0 {
+			buf.WriteString(" {")
+			buf.WriteString(stmt.Args[0])
+			buf.WriteRune('}')
+		}
+	}
 }
