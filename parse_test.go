@@ -9,7 +9,7 @@ import (
 )
 
 func TestIncludeReqular(t *testing.T) {
-	filename := "config/fixture/crossplane/includes-regular/nginx.conf"
+	filename := "fixture/crossplane/includes-regular/nginx.conf"
 	p := parse(filename, defaultParseOpts())
 	b, _ := json.Marshal(p)
 	expect, err := ioutil.ReadFile(filepath.Join(filepath.Dir(filename), "expect.json"))

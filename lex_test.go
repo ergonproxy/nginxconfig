@@ -7,7 +7,7 @@ import (
 )
 
 func TestLexSimple(t *testing.T) {
-	file := "config/fixture/crossplane/simple/nginx.conf"
+	file := "fixture/crossplane/simple/nginx.conf"
 	f, err := os.Open(file)
 	if err != nil {
 		t.Fatal(err)
@@ -51,7 +51,7 @@ func TestLexSimple(t *testing.T) {
 }
 
 func TestLexWithComments(t *testing.T) {
-	file := "config/fixture/crossplane/with-comments/nginx.conf"
+	file := "fixture/crossplane/with-comments/nginx.conf"
 	f, err := os.Open(file)
 	if err != nil {
 		t.Fatal(err)
@@ -99,7 +99,7 @@ func TestLexWithComments(t *testing.T) {
 }
 
 func TestLexmessyConfig(t *testing.T) {
-	file := "config/fixture/crossplane/messy/nginx.conf"
+	file := "fixture/crossplane/messy/nginx.conf"
 	f, err := os.Open(file)
 	if err != nil {
 		t.Fatal(err)
@@ -221,7 +221,7 @@ func TestLexmessyConfig(t *testing.T) {
 }
 
 func TestLexQuoteBehavior(t *testing.T) {
-	file := "config/fixture/crossplane/quote-behavior/nginx.conf"
+	file := "fixture/crossplane/quote-behavior/nginx.conf"
 	f, err := os.Open(file)
 	if err != nil {
 		t.Fatal(err)
@@ -252,7 +252,7 @@ func TestLexQuoteBehavior(t *testing.T) {
 }
 
 func TestQUoteRightBrace(t *testing.T) {
-	file := "config/fixture/crossplane/quoted-right-brace/nginx.conf"
+	file := "fixture/crossplane/quoted-right-brace/nginx.conf"
 	f, err := os.Open(file)
 	if err != nil {
 		t.Fatal(err)
