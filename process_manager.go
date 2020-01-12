@@ -13,12 +13,13 @@ import (
 )
 
 type processManager struct {
-	m          childManager
-	onSignal   func(os.Signal) error
-	childCount int
-	rpcHandle  jsonrpc2.Handler
-	rpcOpts    []jsonrpc2.ConnOpt
-	process    *sync.Map
+	m                   childManager
+	onSignal            func(os.Signal) error
+	childProcessOptions processOptions
+	childCount          int
+	rpcHandle           jsonrpc2.Handler
+	rpcOpts             []jsonrpc2.ConnOpt
+	process             *sync.Map
 }
 
 func newProcessManager(m childManager, count int, hand jsonrpc2.Handler, opts ...jsonrpc2.ConnOpt) *processManager {
@@ -30,7 +31,7 @@ func newProcessManager(m childManager, count int, hand jsonrpc2.Handler, opts ..
 
 func (p *processManager) start(ctx context.Context) error {
 	for i := 0; i < p.childCount; i++ {
-		ch, err := p.m.Create(ctx)
+		ch, err := p.m.Create(ctx, p.childProcessOptions)
 		if err != nil {
 			return err
 		}
@@ -100,8 +101,15 @@ type childConn struct {
 	ch  childProcess
 }
 
+type processOptions struct {
+	Path       string
+	Env        []string
+	Dir        string
+	ExtraFiles []*os.File
+}
+
 type childManager interface {
-	Create(context.Context) (childProcess, error)
+	Create(context.Context, processOptions) (childProcess, error)
 }
 
 type childProcess interface {
