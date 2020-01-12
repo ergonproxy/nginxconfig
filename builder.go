@@ -2,6 +2,7 @@ package main
 
 import (
 	"io"
+	"strconv"
 	"strings"
 	"unicode"
 )
@@ -61,7 +62,8 @@ func enquote(arg string) string {
 	if !needsQuote(arg) {
 		return arg
 	}
-	return strings.Replace(arg, `\\`, `\`, -1)
+	arg = strings.Replace(arg, `\\\\`, `\\`, -1)
+	return strconv.Quote(arg)
 }
 
 func needsQuote(s string) bool {
