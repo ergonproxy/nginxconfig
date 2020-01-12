@@ -3,8 +3,6 @@ package main
 import (
 	"fmt"
 	"strings"
-
-	"github.com/ergongate/vince/config/nginx"
 )
 
 // bit masks for different directive argument styles
@@ -1452,13 +1450,6 @@ func toCtx(s ...string) string {
 		return strings.Join(s, ",")
 	}
 	return ""
-}
-
-func enterBlockContext(stmt *nginx.Directive, ctx []string) []string {
-	if len(ctx) > 0 && ctx[0] == "http" && stmt.Name == "location" {
-		return []string{"http", "location"}
-	}
-	return append(ctx, stmt.Name)
 }
 
 func analyze(filename string, stmt *Stmt, term string, ctx []string, strict bool, checkCtx bool, checkArgs bool) error {
