@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestIncludeReqular(t *testing.T) {
+func TestParseIncludeReqular(t *testing.T) {
 	filename := "fixture/crossplane/includes-regular/nginx.conf"
 	p := parse(filename, defaultParseOpts())
 	b, _ := json.Marshal(p)
