@@ -10,6 +10,17 @@ import (
 )
 
 var _ childProcess = (*child)(nil)
+var _ childManager = execManager{}
+
+type execManager struct{}
+
+func (execManager) Create(ctx context.Context, opts processOptions) (childProcess, error) {
+	cmd := exec.CommandContext(ctx, opts.Path, opts.Args...)
+	cmd.Env = opts.Env
+	cmd.Dir = opts.Dir
+	cmd.ExtraFiles = opts.ExtraFiles
+	return &child{cmd: cmd}, nil
+}
 
 type child struct {
 	cmd     *exec.Cmd

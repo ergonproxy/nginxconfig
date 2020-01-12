@@ -103,6 +103,7 @@ type childConn struct {
 
 type processOptions struct {
 	Path       string
+	Args       []string
 	Env        []string
 	Dir        string
 	ExtraFiles []*os.File
