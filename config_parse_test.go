@@ -21,9 +21,9 @@ func TestParseIncludeReqular(t *testing.T) {
 	}
 }
 
-func TestParseIncludesBlobbed(t *testing.T) {
+func TestParseIncludesGlobbed(t *testing.T) {
 	filename := "fixture/crossplane/includes-globbed/nginx.conf"
-	expectFile := filepath.Join(filepath.Dir(filename), "expect.json")
+	expectFile := filepath.Join(filepath.Dir(filename), "expect_globbed.json")
 	p := parse(filename, defaultParseOpts())
 	b, _ := json.Marshal(p)
 	expect, err := ioutil.ReadFile(expectFile)
@@ -36,7 +36,7 @@ func TestParseIncludesBlobbed(t *testing.T) {
 }
 func TestParseIncludesBlobbedCombined(t *testing.T) {
 	filename := "fixture/crossplane/includes-globbed/nginx.conf"
-	expectFile := filepath.Join(filepath.Dir(filename), "expect.json")
+	expectFile := filepath.Join(filepath.Dir(filename), "expect_globbed_combine.json")
 	opts := defaultParseOpts()
 	opts.combine = true
 	p := parse(filename, opts)
