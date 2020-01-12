@@ -119,5 +119,5 @@ type childProcess interface {
 	Signal(os.Signal) error
 	Kill() error
 	Close() error
-	Pid() uint64
+	Pid() int
 }
