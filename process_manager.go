@@ -2,8 +2,11 @@ package main
 
 import (
 	"context"
+	"errors"
 	"io"
+	"os"
 	"runtime"
+	"strings"
 	"sync"
 
 	"github.com/sourcegraph/jsonrpc2"
@@ -11,6 +14,7 @@ import (
 
 type processManager struct {
 	m          childManager
+	onSignal   func(os.Signal) error
 	childCount int
 	rpcHandle  jsonrpc2.Handler
 	rpcOpts    []jsonrpc2.ConnOpt
@@ -41,7 +45,7 @@ func (p *processManager) startProcess(ctx context.Context, ch childProcess) erro
 	}
 	stream := jsonrpc2.NewBufferedStream(ch, jsonrpc2.VSCodeObjectCodec{})
 	h := jsonrpc2.NewConn(ctx, stream, p.rpcHandle, p.rpcOpts...)
-	p.process.Store(ch.Pid(), h)
+	p.process.Store(ch.Pid(), &childConn{rpc: h, ch: ch})
 	for {
 		select {
 		case <-ctx.Done():
@@ -52,6 +56,50 @@ func (p *processManager) startProcess(ctx context.Context, ch childProcess) erro
 	}
 }
 
+func (p *processManager) kill() error {
+	var errs []string
+	p.process.Range(func(key, value interface{}) bool {
+		v := value.(*childConn)
+		// close rpc server before we kill the child
+		if err := v.rpc.Close(); err != nil {
+			errs = append(errs, err.Error())
+		}
+
+		if err := v.ch.Kill(); err != nil {
+			errs = append(errs, err.Error())
+		}
+		return true
+	})
+	if errs != nil {
+		return errors.New(strings.Join(errs, ","))
+	}
+	return nil
+}
+func (p *processManager) Signal(sig os.Signal) error {
+	var errs []string
+	p.process.Range(func(key, value interface{}) bool {
+		v := value.(*childConn)
+		if err := v.ch.Signal(sig); err != nil {
+			errs = append(errs, err.Error())
+		}
+		return true
+	})
+	if p.onSignal != nil {
+		if err := p.onSignal(sig); err != nil {
+			errs = append(errs, err.Error())
+		}
+	}
+	if errs != nil {
+		return errors.New(strings.Join(errs, ","))
+	}
+	return nil
+}
+
+type childConn struct {
+	rpc *jsonrpc2.Conn
+	ch  childProcess
+}
+
 type childManager interface {
 	Create(context.Context) (childProcess, error)
 }
@@ -60,6 +108,8 @@ type childProcess interface {
 	io.Reader // reads stdout of the child process
 	io.Writer // writes to stdin of the child process
 	Start(context.Context) error
+	Signal(os.Signal) error
+	Kill() error
 	Close() error
 	Pid() uint64
 }
