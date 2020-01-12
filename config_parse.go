@@ -7,6 +7,7 @@ import (
 	"strings"
 )
 
+// Stmt defines a nginx configuration directive.
 type Stmt struct {
 	Directive string
 	Filename  string
@@ -119,7 +120,7 @@ func parseInternal(parsing *parsingContext, tokens *tokenIter, ctx []string, con
 			if !filepath.IsAbs(pattern) {
 				pattern = filepath.Join(parsing.opts.configDir, pattern)
 			}
-			var fnames []string
+			var filenames []string
 			if strings.Contains(pattern, "*") {
 				n, err := filepath.Glob(pattern)
 				if err != nil {
@@ -131,8 +132,8 @@ func parseInternal(parsing *parsingContext, tokens *tokenIter, ctx []string, con
 						},
 					)
 				} else {
-					fnames = n
-					sort.Strings(fnames)
+					filenames = n
+					sort.Strings(filenames)
 				}
 			} else {
 				f, err := os.Open(pattern)
@@ -155,13 +156,13 @@ func parseInternal(parsing *parsingContext, tokens *tokenIter, ctx []string, con
 							},
 						)
 					} else {
-						fnames = n
+						filenames = n
 					}
 					f.Close()
 				}
 
 			}
-			for _, name := range fnames {
+			for _, name := range filenames {
 				parsing.opts.included[name] = len(parsing.opts.includes)
 				parsing.opts.includes = append(parsing.opts.includes, fileCtx{
 					name: name,

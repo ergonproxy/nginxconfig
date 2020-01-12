@@ -7,36 +7,44 @@ import (
 	"unicode"
 )
 
+// NgxError this is error returned when parsing/lexing nginx configuration file.
 type NgxError struct {
 	Reason   string
 	Linenum  int
 	Filename string
 }
 
-func newError(reason string, line int, fname string) NgxError {
-	return NgxError{Reason: reason, Linenum: line, Filename: fname}
+func newError(reason string, line int, filename string) NgxError {
+	return NgxError{Reason: reason, Linenum: line, Filename: filename}
 }
 
 func (n NgxError) Error() string {
 	return fmt.Sprintf("%s:%d %s", n.Filename, n.Linenum, n.Reason)
 }
 
+// NgxParserDirectiveUnknownError is returned when parsing unknown directive
 type NgxParserDirectiveUnknownError struct {
 	NgxError
 }
 
+// NgxParserDirectiveContextError is returned when directive is in the wrong
+// context.
 type NgxParserDirectiveContextError struct {
 	NgxError
 }
 
+// NgxParserDirectiveArgumentsError is returned for invalid arguments
 type NgxParserDirectiveArgumentsError struct {
 	NgxError
 }
 
+// Iter reads one rune at a time, returns io.EOF if it has reached the end on
+// the stream.
 type Iter interface {
 	Next() (rune, error)
 }
 
+// IterLine returns a rune and line number on which the rune was read.
 type IterLine interface {
 	Next() (rune, int, error)
 }
@@ -107,11 +115,11 @@ func (lx *lexer) lex() error {
 					quote: false,
 				})
 				if clx, ok := lx.custom(lx.token); ok {
-					tkns, err := clx.lex(lx.iter, lx.token)
+					lexTokens, err := clx.lex(lx.iter, lx.token)
 					if err != nil {
 						return err
 					}
-					lx.tokens = append(lx.tokens, tkns...)
+					lx.tokens = append(lx.tokens, lexTokens...)
 				} else {
 					lx.nextTokenIsDirective = false
 				}
@@ -177,11 +185,11 @@ func (lx *lexer) lex() error {
 				quote: true,
 			})
 			if clx, ok := lx.custom(lx.token); ok {
-				tkns, err := clx.lex(lx.iter, lx.token)
+				lexTokens, err := clx.lex(lx.iter, lx.token)
 				if err != nil {
 					return err
 				}
-				lx.tokens = append(lx.tokens, tkns...)
+				lx.tokens = append(lx.tokens, lexTokens...)
 				lx.nextTokenIsDirective = true
 			} else {
 				lx.nextTokenIsDirective = false
