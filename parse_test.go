@@ -34,3 +34,18 @@ func TestParseIncludesBlobbed(t *testing.T) {
 		t.Error("failed to match expectation")
 	}
 }
+func TestParseIncludesBlobbedCombined(t *testing.T) {
+	filename := "fixture/crossplane/includes-globbed/nginx.conf"
+	expectFile := filepath.Join(filepath.Dir(filename), "expect.json")
+	opts := defaultParseOpts()
+	opts.combine = true
+	p := parse(filename, opts)
+	b, _ := json.Marshal(p)
+	expect, err := ioutil.ReadFile(expectFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(b, expect) {
+		t.Error("failed to match expectation")
+	}
+}

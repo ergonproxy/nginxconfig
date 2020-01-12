@@ -261,6 +261,9 @@ func parse(filename string, opts *parseOpts) *payload {
 		}
 		pld.Config = append(pld.Config, parsing)
 	}
+	if opts.combine {
+		return combineParsedConfig(opts, pld)
+	}
 	return pld
 }
 
