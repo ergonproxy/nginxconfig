@@ -46,7 +46,7 @@ http {
         listeb 127.0.0.1:8080;
         server_name default_server;
         location / {
-            return 200 foo bar baz;
+            return 200 "foo bar baz";
         }
     }
 }`
