@@ -143,18 +143,19 @@ func check003(it *runeIter, ch rune, expanding bool) bool {
 	return false
 }
 
-func build(buf *strings.Builder, p []*Stmt, indent int, header bool) {
+func build(p []*Stmt, indent int, header bool) string {
+	o := ""
 	if header {
-		buf.WriteString(`# This config was built from JSON using NGINX crossplane.
+		o = `# This config was built from JSON using NGINX crossplane.
 		# If you encounter any bugs please report them here:
 		# https://github.com/nginxinc/crossplane/issues
-		`)
+		`
 	}
-	buildBlock(buf, defaultCustomBuilder(), p, indent, 0, 0)
+	return buildBlock(o, defaultCustomBuilder(), p, indent, 0, 0)
 }
 
 type customBuilder interface {
-	build(buf *strings.Builder, stmt *Stmt, padding, depth int)
+	build(buf string, stmt *Stmt, padding, depth int) string
 }
 
 func defaultCustomBuilder() map[string]customBuilder {
@@ -165,26 +166,18 @@ func defaultCustomBuilder() map[string]customBuilder {
 	}
 	return m
 }
-func buildBlock(buf *strings.Builder, custom map[string]customBuilder, block []*Stmt, padding int, depth, lastLine int) {
-	built := new(strings.Builder)
-	padBuild := func() {
-		margin(built, padding, depth)
-	}
-	padBuf := func() {
-		margin(buf, padding, depth)
-	}
+func buildBlock(output string, custom map[string]customBuilder, block []*Stmt, padding int, depth, lastLine int) string {
+	m := margin(padding, depth)
 	for _, stmt := range block {
-		built.Reset()
+		built := ""
 		directive := enquote(stmt.Directive)
 		if directive == "#" && stmt.Line == lastLine {
-			buf.WriteByte('#')
-			buf.WriteString(stmt.Comment)
+			output += " #" + stmt.Comment
 			continue
 		} else if directive == "#" {
-			built.WriteRune('#')
-			built.WriteString(stmt.Comment)
+			built += " #" + stmt.Comment
 		} else if c, ok := custom[directive]; ok {
-			c.build(built, stmt, padding, depth)
+			built = c.build(built, stmt, padding, depth)
 		} else {
 			var args []string
 			if len(stmt.Args) > 0 {
@@ -193,36 +186,35 @@ func buildBlock(buf *strings.Builder, custom map[string]customBuilder, block []*
 					args[i] = enquote(stmt.Args[i])
 				}
 			}
-			built.WriteString(directive)
 			if directive == "if" {
-				built.WriteString(" (")
-				built.WriteString(strings.Join(args, " "))
-				built.WriteRune(')')
+				built = " if" + strings.Join(args, " ") + ")"
 			} else if args != nil {
-				built.WriteString(strings.Join(args, " "))
+				built = directive + " " + strings.Join(args, " ")
+			} else {
+				built = directive
 			}
 			if len(stmt.Blocks) > 0 {
-				built.WriteString(" {")
-				buildBlock(built, custom, stmt.Blocks, padding, depth+1, stmt.Line)
-				built.WriteRune('\n')
-				padBuild()
-				buf.WriteRune('}')
+				built += " {"
+				built = buildBlock(built, custom, stmt.Blocks, padding, depth+1, stmt.Line)
+				built += "\n" + m + "}"
 			} else {
-				built.WriteRune(';')
+				built += ";"
 			}
 		}
-		if buf.Len() > 0 {
-			buf.WriteRune('\n')
+		if len(output) > 0 {
+			output += "\n"
 		}
-		padBuf()
-		buf.WriteString(built.String())
+		output += m + built
 		lastLine = stmt.Line
 	}
+	return output
 }
 
-func margin(buf *strings.Builder, padding int, depth int) {
+func margin(padding int, depth int) string {
 	x := padding * depth
+	o := ""
 	for i := 0; i < x; i++ {
-		buf.WriteRune(' ')
+		o += " "
 	}
+	return o
 }

@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"strings"
 	"unicode"
 )
 
@@ -371,22 +370,23 @@ func consumeSpace(it IterLine) (ch rune, line int, err error) {
 	return
 }
 
-func (luaLexer) build(buf *strings.Builder, stmt *Stmt, padding, depth int) {
-	buf.WriteString(stmt.Directive)
+func (luaLexer) build(buf string, stmt *Stmt, padding, depth int) string {
+	buf += stmt.Directive
 	if stmt.Directive == "set_by_lua_block" {
 		if len(stmt.Args) > 0 {
-			buf.WriteString(" " + stmt.Args[0])
+			buf += " " + stmt.Args[0]
 		}
 		if len(stmt.Args) > 1 {
-			buf.WriteString(" {")
-			buf.WriteString(stmt.Args[1])
-			buf.WriteRune('}')
+			buf += " {"
+			buf += stmt.Args[1]
+			buf += "}"
 		}
 	} else {
 		if len(stmt.Args) > 0 {
-			buf.WriteString(" {")
-			buf.WriteString(stmt.Args[0])
-			buf.WriteRune('}')
+			buf += " {"
+			buf += stmt.Args[0]
+			buf += "}"
 		}
 	}
+	return buf
 }
