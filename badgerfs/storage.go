@@ -69,7 +69,8 @@ func (s *storage) Children(dir string) []*file {
 		if err != nil {
 			return err
 		}
-		if _, ok := child(dir, path); ok {
+		p := strings.TrimPrefix(path, dir)
+		if firstCHild(p) {
 			f, err := getFile()
 			if err != nil {
 				return err
@@ -81,6 +82,22 @@ func (s *storage) Children(dir string) []*file {
 	if ferr != nil {
 	}
 	return l
+}
+
+func firstCHild(s string) bool {
+	if s == "" {
+		return false
+	}
+	switch strings.Count(s, "/") {
+	case 0:
+		return true
+	case 1:
+		return s[0] == '/' || s[len(s)-1] == '/'
+	case 2:
+		return s[0] == '/' && s[len(s)-1] == '/'
+	default:
+		return false
+	}
 }
 
 func (s *storage) MustGet(path string) *file {
