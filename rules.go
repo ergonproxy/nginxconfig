@@ -6,10 +6,13 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 )
 
-type (
-	pathKey struct{}
+// time formats
+const (
+	iso8601Milli        = "2006-01-02T15:04:05.000Z"
+	commonLogFormatTime = "02/Jan/2006:15:04:05 -0700"
 )
 
 type rule struct {
@@ -56,15 +59,15 @@ func interpret(ctx context.Context, value interface{}) interface{} {
 	if !strings.Contains(s, "$") {
 		return value
 	}
-	// if we can retrive full value from context then its good
-	if v := ctx.Value(s); v != nil {
-		return v
+	if v := ctx.Value(variables{}); v != nil {
+		m := v.(*sync.Map)
+		return resolveVariables(m, []byte(s))
 	}
-	return resolveVariables(ctx, []byte(s))
+	return ""
 }
 
 func ngxAlias(path string) ruleApplyChain {
-	return ruleKVChain(pathKey{}, path)
+	return ruleKVChain(aliasKey{}, path)
 }
 
 func ngxAbsoluteRedirect(ok string) ruleApplyChain {
@@ -96,10 +99,10 @@ func ruleKVChain(key, value interface{}) ruleApplyChain {
 
 var variableRegexp = regexp.MustCompile(`\$([a-z_]\w*)`)
 
-func resolveVariables(ctx context.Context, src []byte) []byte {
+func resolveVariables(m *sync.Map, src []byte) []byte {
 	return variableRegexp.ReplaceAllFunc(src, func(name []byte) []byte {
 		n := string(name)
-		if v := ctx.Value(n); v != nil {
+		if v := getVariable(m, n); v != nil {
 			return toByte(v)
 		}
 		return []byte{}

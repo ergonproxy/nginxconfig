@@ -7,6 +7,7 @@ type (
 	absoluteRedirectKey         struct{} //absolute_redirect
 	acceptMutexKey              struct{} //accept_mutex,off
 	acceptMutextDelayKey        struct{} //accept_mutex_delay,500ms
+	aliasKey                    struct{} //alias
 	chunkedTransferEncodingKey  struct{} //chunked_transfer_encoding
 	clientBodyBufferSizeKey     struct{} //client_body_buffer_size
 	clientBodyInFileOnlyKey     struct{} //client_body_in_file_only

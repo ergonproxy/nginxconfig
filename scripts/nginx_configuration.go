@@ -91,6 +91,7 @@ type HTTP struct {
 
 type SharedHTTP struct {
 	ErrorLog                 []ErrorLog        `nginx:"error_log"`
+	Alias                    string            `nginx:"alias"`
 	AbsoluteRedirect         bool              `nginx:"absolute_redirect"`
 	AIO                      string            `nginx:"aio"`
 	AIOWrite                 bool              `nginx:"aio_write"`
