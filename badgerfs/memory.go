@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"gopkg.in/src-d/go-billy.v4"
-	"gopkg.in/src-d/go-billy.v4/helper/chroot"
 	"gopkg.in/src-d/go-billy.v4/util"
 )
 
@@ -22,12 +21,19 @@ const separator = "/"
 type Memory struct {
 	s         *storage
 	tempCount int
+	root      string
+}
+
+func (m *Memory) Root() string {
+	return m.root
+}
+func (m *Memory) Chroot(root string) (billy.Filesystem, error) {
+	return &Memory{root: root, s: m.s}, nil
 }
 
 //New returns a new Memory filesystem.
 func New(kv KV) billy.Filesystem {
-	fs := &Memory{s: newStorage(kv)}
-	return chroot.New(fs, separator)
+	return &Memory{s: newStorage(kv), root: separator}
 }
 
 func (fs *Memory) Create(filename string) (billy.File, error) {
@@ -147,7 +153,21 @@ func (fs *Memory) Rename(from, to string) error {
 }
 
 func (fs *Memory) Remove(filename string) error {
+	filename = clean(filename)
+	fmt.Println(filename)
 	return fs.s.Remove(filename)
+}
+
+func (fs *Memory) RemoveAll(filename string) error {
+	filename = clean(filename)
+	stat, err := fs.Stat(filename)
+	if err != nil {
+		return err
+	}
+	if !stat.IsDir() {
+		return fs.s.Remove(filename)
+	}
+	return fs.s.RemoveAll(filename)
 }
 
 func (fs *Memory) Join(elem ...string) string {

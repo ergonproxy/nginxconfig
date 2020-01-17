@@ -231,6 +231,21 @@ func (s *storage) dirHasChildren(dir string) bool {
 	return ok
 }
 
+func (s *storage) RemoveAll(dir string) error {
+	var files []string
+	s.fs.walk(dir, func(path string, err error, getFile func() (*file, error)) error {
+		files = append(files, path)
+		return nil
+	})
+	for _, f := range files {
+		fmt.Println("removing ", f)
+		if err := s.fs.remove(f); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (s *storage) Remove(path string) error {
 	path = clean(path)
 
