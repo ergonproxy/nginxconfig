@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 )
@@ -156,6 +157,11 @@ const (
 	vURI                     = "$uri"
 )
 
+// extra ctx keys
+type (
+	uriKey     struct{}
+	tlsModeKey struct{}
+)
 type variableFunc func() interface{}
 
 func createVariables() *sync.Map {
@@ -228,4 +234,48 @@ func cachedTimeFunc() func(func(time.Time) string) variableFunc {
 			return f(now)
 		}
 	}
+}
+
+func setRequestVariables(m *sync.Map, r *http.Request) {
+	// seeting query variables
+	query := r.URL.Query()
+	for k := range query {
+		// setting $arg_{query_name}
+		m.Store(vArg+"_"+k, query.Get(k))
+	}
+	m.Store(vArgs, r.URL.RawQuery)
+	m.Store(vContentLength, r.Header.Get("Content-Length"))
+	m.Store(vContentType, r.Header.Get("Content-Type"))
+	for _, cookie := range r.Cookies() {
+		m.Store(vCookie+"_"+cookie.Name, cookie.Value)
+	}
+	ctx := r.Context()
+	root := ""
+	if v := ctx.Value(rootKey{}); v != nil {
+		root = v.(string)
+	} else if v := ctx.Value(aliasKey{}); v != nil {
+		root = v.(string)
+	}
+	m.Store(vDocumentRoot, root)
+	m.Store(vDocumentURI, ctx.Value(uriKey{}))
+	host := r.Host
+	if host == "" {
+		host = r.Header.Get("Host")
+	}
+	if host == "" {
+		if v := ctx.Value(serverNameKey{}); v != nil {
+			host = v.(string)
+		}
+	}
+	m.Store(vHost, host)
+	n, _ := os.Hostname() //TODO: handle errors
+	m.Store(vHostname, n)
+	for h := range r.Header {
+		m.Store(vHTTP+"_"+h, r.Header.Get(h))
+	}
+	a := ""
+	if len(query) > 0 {
+		a = "?"
+	}
+	m.Store(vIsArgs, a)
 }
