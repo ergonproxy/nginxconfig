@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -9,6 +10,10 @@ import (
 
 type httpContext interface {
 	nginx() (*nginx, error)
+}
+
+type filter interface {
+	filter(...string) interface{}
 }
 
 type nginx struct {
@@ -20,6 +25,32 @@ type nginx struct {
 	TimeStamp     string `json:"timestamp"`
 	Pid           string `json:"pid"`
 	PPid          string `json:"ppid"`
+}
+
+func (n nginx) filter(keys ...string) interface{} {
+	if len(keys) > 0 {
+		m := map[string]interface{}{
+			"version":        n.Version,
+			"build":          n.Build,
+			"address":        n.Address,
+			"generation":     n.Generation,
+			"load_timestamp": n.LoadTimeStamp,
+			"timestamp":      n.TimeStamp,
+			"pid":            n.Pid,
+			"ppid":           n.PPid,
+		}
+		x := make(map[string]bool)
+		for _, v := range keys {
+			x[v] = true
+		}
+		for k := range m {
+			if !x[k] {
+				delete(m, k)
+			}
+		}
+		return m
+	}
+	return n
 }
 
 func formatISO8601TimeStamp(t time.Time) string {
@@ -42,7 +73,17 @@ func newHttpAPI(base string, httpCtx httpContext) http.Handler {
 			//TODO serve nginx api error
 			return err
 		}
-		return ctx.JSON(http.StatusOK, ngx)
+		return ctx.JSON(http.StatusOK, apiObject(ngx, ctx.QueryParam("fields")))
 	})
 	return e
+}
+
+func apiObject(v interface{}, query string) interface{} {
+	if query == "" {
+		return v
+	}
+	if f, ok := v.(filter); ok {
+		return f.filter(strings.Split(query, ",")...)
+	}
+	return v
 }
