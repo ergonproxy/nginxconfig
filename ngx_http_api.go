@@ -143,7 +143,7 @@ func formatISO8601TimeStamp(t time.Time) string {
 func newHTTPAPI(base string, httpCtx httpContext) http.Handler {
 	e := echo.New()
 	e.Use(accessLog)
-	api := e.Group(withTrailSlash(base) + supportedAPIVersion)
+	api := e.Group(base)
 	api.GET("/", func(ctx echo.Context) error {
 		var routes []string
 		for _, v := range ctx.Echo().Routes() {
