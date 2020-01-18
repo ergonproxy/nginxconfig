@@ -14,6 +14,11 @@ type httpContext interface {
 	nginx() (*nginx, error)
 	processes() (*processes, error)
 	deleteProcesses() error
+	connections() (*connections, error)
+	deleteConnections() error
+	http() ([]string, error)
+	httpRequests() (*httpRequests, error)
+	deleteHttpRequests() error
 }
 
 type filter interface {
@@ -61,6 +66,76 @@ func (n nginx) filter(keys ...string) interface{} {
 	return n
 }
 
+type connections struct {
+	Accepted int64 `json:"accepted"`
+	Dropped  int64 `json:"dropped"`
+	Active   int64 `json:"active"`
+	Idle     int64 `json:"idle"`
+}
+
+func (c connections) filter(keys ...string) interface{} {
+	if len(keys) > 0 {
+		m := map[string]int64{
+			"accepted": c.Accepted,
+			"dropped":  c.Dropped,
+			"active":   c.Active,
+			"idle":     c.Idle,
+		}
+		x := make(map[string]bool)
+		for _, v := range keys {
+			x[v] = true
+		}
+		for k := range m {
+			if !x[k] {
+				delete(m, k)
+			}
+		}
+		return m
+	}
+	return c
+}
+
+type httpRequests struct {
+	Total   int64 `json:"total"`
+	Current int64 `json:"current"`
+}
+
+func (h httpRequests) filter(keys ...string) interface{} {
+	if len(keys) > 0 {
+		m := map[string]int64{
+			"total":   h.Total,
+			"current": h.Current,
+		}
+		x := make(map[string]bool)
+		for _, v := range keys {
+			x[v] = true
+		}
+		for k := range m {
+			if !x[k] {
+				delete(m, k)
+			}
+		}
+		return m
+	}
+	return h
+}
+
+type httpServerZones struct {
+	Processing int64 `json:"processing"`
+	Requests   int64 `json:"requests"`
+	Responses  struct {
+		R1xx  int64 `json:"1xx"`
+		R2xx  int64 `json:"2xx"`
+		R3xx  int64 `json:"3xx"`
+		R4xx  int64 `json:"4xx"`
+		R5xx  int64 `json:"5xx"`
+		Total int64 `json:"total"`
+	} `json:"responses"`
+	Discarded int64 `json:"discarded"`
+	Received  int64 `json:"received"`
+	Sent      int64 `json:"sent"`
+}
+
 func formatISO8601TimeStamp(t time.Time) string {
 	return t.Format(iso8601Milli)
 }
@@ -92,6 +167,50 @@ func newHTTPAPI(base string, httpCtx httpContext) http.Handler {
 	})
 	api.DELETE("/processes", func(ctx echo.Context) error {
 		err := httpCtx.deleteProcesses()
+		if err != nil {
+			return api500Error(ctx, err)
+		}
+		return ctx.JSON(http.StatusNoContent, nil)
+	})
+	api.GET("/connections", func(ctx echo.Context) error {
+		c, err := httpCtx.connections()
+		if err != nil {
+			return api500Error(ctx, err)
+		}
+		return ctx.JSON(http.StatusOK, apiObject(c, ctx.QueryParam("fields")))
+	})
+	api.DELETE("/connections", func(ctx echo.Context) error {
+		err := httpCtx.deleteConnections()
+		if err != nil {
+			return api500Error(ctx, err)
+		}
+		return ctx.JSON(http.StatusNoContent, nil)
+	})
+	api.GET("/slabs", func(ctx echo.Context) error {
+		return ctx.JSON(http.StatusNotImplemented, nil)
+	})
+	api.GET("/slabs/:slabs_name", func(ctx echo.Context) error {
+		return ctx.JSON(http.StatusNotImplemented, nil)
+	})
+	api.DELETE("/slabs/:slabs_name", func(ctx echo.Context) error {
+		return ctx.JSON(http.StatusNotImplemented, nil)
+	})
+	api.GET("/http/", func(ctx echo.Context) error {
+		p, err := httpCtx.http()
+		if err != nil {
+			return api500Error(ctx, err)
+		}
+		return ctx.JSON(http.StatusOK, p)
+	})
+	api.GET("/http/requests", func(ctx echo.Context) error {
+		c, err := httpCtx.connections()
+		if err != nil {
+			return api500Error(ctx, err)
+		}
+		return ctx.JSON(http.StatusOK, apiObject(c, ctx.QueryParam("fields")))
+	})
+	api.DELETE("/http/requests", func(ctx echo.Context) error {
+		err := httpCtx.deleteHttpRequests()
 		if err != nil {
 			return api500Error(ctx, err)
 		}
