@@ -91,7 +91,8 @@ const (
 	vRequestFilename         = "$request_filename"
 	vRequestID               = "$request_id"
 	vRequestLength           = "$request_length"
-	vRequestMethod           = "$request_time"
+	vRequestMethod           = "$request_method"
+	vRequestTime             = "$request_time"
 	vRequestURI              = "$request_uri"
 	vScheme                  = "$scheme"
 	vSecureLink              = "$secure_link"
@@ -161,6 +162,7 @@ const (
 type (
 	uriKey     struct{}
 	tlsModeKey struct{}
+	requestID  struct{}
 )
 type variableFunc func() interface{}
 

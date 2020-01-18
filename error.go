@@ -33,7 +33,7 @@ const docsSite = "https://docs.vince.co.tz/"
 var statusTextMap = map[int]string{
 	statusNoResponse:             "No Response",
 	statusRequestHeaderTooLarge:  "Request header too large",
-	statusSSLCertificateError:    " SSL Certificate Error",
+	statusSSLCertificateError:    "SSL Certificate Error",
 	statusSSLCertificateRequired: "SSL Certificate Required",
 	statusHTTPToHTTPSPort:        "HTTP Request Sent to HTTPS Port",
 	statusClientClosedRequest:    "Client Closed Request",
@@ -65,7 +65,7 @@ type httpErrorResponse struct {
 	HREF      string    `json:"href"`
 }
 
-func newyHTTPResponse(code int, id string) httpErrorResponse {
+func newHTTPErrorResponse(code int, id string) httpErrorResponse {
 	return httpErrorResponse{
 		Error: httpError{
 			Status: code,

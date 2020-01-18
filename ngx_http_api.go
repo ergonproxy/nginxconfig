@@ -67,6 +67,7 @@ func formatISO8601TimeStamp(t time.Time) string {
 
 func newHTTPAPI(base string, httpCtx httpContext) http.Handler {
 	e := echo.New()
+	e.Use(accessLog)
 	api := e.Group(withTrailSlash(base) + supportedAPIVersion)
 	api.GET("/", func(ctx echo.Context) error {
 		var routes []string
@@ -78,28 +79,35 @@ func newHTTPAPI(base string, httpCtx httpContext) http.Handler {
 	api.GET("/nginx", func(ctx echo.Context) error {
 		ngx, err := httpCtx.nginx()
 		if err != nil {
-			//TODO serve nginx api error
-			return err
+			return api500Error(ctx, err)
 		}
 		return ctx.JSON(http.StatusOK, apiObject(ngx, ctx.QueryParam("fields")))
 	})
 	api.GET("/processes", func(ctx echo.Context) error {
 		p, err := httpCtx.processes()
 		if err != nil {
-			//TODO serve nginx api error
-			return err
+			return api500Error(ctx, err)
 		}
 		return ctx.JSON(http.StatusOK, p)
 	})
 	api.DELETE("/processes", func(ctx echo.Context) error {
 		err := httpCtx.deleteProcesses()
 		if err != nil {
-			//TODO serve nginx api error
-			return err
+			return api500Error(ctx, err)
 		}
 		return ctx.JSON(http.StatusNoContent, nil)
 	})
 	return e
+}
+
+func api500Error(echoCtx echo.Context, err error) error {
+	ctx := echoCtx.Request().Context()
+	errorLog(ctx, err)
+	return echoCtx.JSON(
+		http.StatusInternalServerError,
+		newHTTPErrorResponse(http.StatusInternalServerError,
+			ctx.Value(requestID{}).(string)),
+	)
 }
 
 func withTrailSlash(s string) string {
