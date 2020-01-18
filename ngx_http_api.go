@@ -37,7 +37,12 @@ func newHttpAPI(base string, httpCtx httpContext) http.Handler {
 		return ctx.JSON(http.StatusOK, routes)
 	})
 	api.GET("/nginx", func(ctx echo.Context) error {
-		return nil
+		ngx, err := httpCtx.nginx()
+		if err != nil {
+			//TODO serve nginx api error
+			return err
+		}
+		return ctx.JSON(http.StatusOK, ngx)
 	})
 	return e
 }
