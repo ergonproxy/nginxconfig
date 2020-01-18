@@ -8,8 +8,12 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+const supportedAPIVersion = "6"
+
 type httpContext interface {
 	nginx() (*nginx, error)
+	processes() (*processes, error)
+	deleteProcesses() error
 }
 
 type filter interface {
@@ -25,6 +29,10 @@ type nginx struct {
 	TimeStamp     string `json:"timestamp"`
 	Pid           string `json:"pid"`
 	PPid          string `json:"ppid"`
+}
+
+type processes struct {
+	Respawned int `json:"respawned"`
 }
 
 func (n nginx) filter(keys ...string) interface{} {
@@ -57,9 +65,9 @@ func formatISO8601TimeStamp(t time.Time) string {
 	return t.Format(iso8601Milli)
 }
 
-func newHttpAPI(base string, httpCtx httpContext) http.Handler {
+func newHTTPAPI(base string, httpCtx httpContext) http.Handler {
 	e := echo.New()
-	api := e.Group(base)
+	api := e.Group(withTrailSlash(base) + supportedAPIVersion)
 	api.GET("/", func(ctx echo.Context) error {
 		var routes []string
 		for _, v := range ctx.Echo().Routes() {
@@ -75,7 +83,33 @@ func newHttpAPI(base string, httpCtx httpContext) http.Handler {
 		}
 		return ctx.JSON(http.StatusOK, apiObject(ngx, ctx.QueryParam("fields")))
 	})
+	api.GET("/processes", func(ctx echo.Context) error {
+		p, err := httpCtx.processes()
+		if err != nil {
+			//TODO serve nginx api error
+			return err
+		}
+		return ctx.JSON(http.StatusOK, p)
+	})
+	api.DELETE("/processes", func(ctx echo.Context) error {
+		err := httpCtx.deleteProcesses()
+		if err != nil {
+			//TODO serve nginx api error
+			return err
+		}
+		return ctx.JSON(http.StatusNoContent, nil)
+	})
 	return e
+}
+
+func withTrailSlash(s string) string {
+	if s == "" {
+		return "/"
+	}
+	if s[len(s)-1] == '/' {
+		return s
+	}
+	return s + "/"
 }
 
 func apiObject(v interface{}, query string) interface{} {
