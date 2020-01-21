@@ -2,10 +2,18 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"os"
+	"regexp"
 	"sync"
 	"time"
+)
+
+// time formats
+const (
+	iso8601Milli        = "2006-01-02T15:04:05.000Z"
+	commonLogFormatTime = "02/Jan/2006:15:04:05 -0700"
 )
 
 type variables struct{}
@@ -280,4 +288,27 @@ func setRequestVariables(m *sync.Map, r *http.Request) {
 		a = "?"
 	}
 	m.Store(vIsArgs, a)
+}
+
+var variableRegexp = regexp.MustCompile(`\$([a-z_]\w*)`)
+
+func resolveVariables(m *sync.Map, src []byte) []byte {
+	return variableRegexp.ReplaceAllFunc(src, func(name []byte) []byte {
+		n := string(name)
+		if v := getVariable(m, n); v != nil {
+			return toByte(v)
+		}
+		return []byte{}
+	})
+}
+
+func toByte(v interface{}) []byte {
+	switch e := v.(type) {
+	case []byte:
+		return e
+	case string:
+		return []byte(e)
+	default:
+		return []byte(fmt.Sprint(v))
+	}
 }

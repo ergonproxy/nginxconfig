@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type (
@@ -87,12 +88,32 @@ type listenOpts struct {
 	http2         bool
 	spdy          bool
 	proxyProtocol bool
+
+	//ssl related options
 }
 
-func parseListen(stmt *Stmt, defaultPort string) listenOpts {
+type sslOptions struct {
+	bufferSize          int
+	certificate         string
+	key                 string
+	clientCertificate   string
+	crl                 string
+	dhParam             string
+	earlData            bool
+	ecdhCUrve           string
+	passwordFile        string
+	preferServerCiphers string
+	protocols           []string
+	sessionCache        string
+	sessionTicketKey    string
+	sessionTickets      string
+	timeout             time.Duration
+}
+
+func parseListen(r *rule, defaultPort string) listenOpts {
 	var ls listenOpts
-	if len(stmt.Args) > 0 {
-		a := stmt.Args[0]
+	if len(r.args) > 0 {
+		a := r.args[0]
 		if _, err := strconv.Atoi(a); err == nil {
 			ls.net = "tcp"
 			ls.addrPort = ":" + a
@@ -118,8 +139,8 @@ func parseListen(stmt *Stmt, defaultPort string) listenOpts {
 				}
 			}
 		}
-		if len(stmt.Args) > 1 {
-			for _, a := range stmt.Args[1:] {
+		if len(r.args) > 1 {
+			for _, a := range r.args[1:] {
 				switch a {
 				case "default_server":
 					ls.defaultServer = true

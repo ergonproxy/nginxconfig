@@ -16,10 +16,10 @@ func TestParseListen(t *testing.T) {
 		{[]string{"[::1]"}, "tcp", "[::1]:8000"},
 		{[]string{"unix:/var/run/nginx.sock"}, "unix", "/var/run/nginx.sock"},
 	}
-	stmt := &Stmt{Directive: "listen"}
+	stmt := &rule{name: "listen"}
 	for _, s := range sample {
 		t.Run(s.args[0], func(ts *testing.T) {
-			stmt.Args = s.args
+			stmt.args = s.args
 			o := parseListen(stmt, "8000")
 			if o.net != s.net {
 				ts.Errorf("net: expected %q got %q", s.net, o.net)
