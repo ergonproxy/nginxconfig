@@ -2,12 +2,10 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"crypto/tls"
 	"fmt"
 	"io/ioutil"
 	"net"
-	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
@@ -24,72 +22,6 @@ type (
 )
 
 var tlsCache = new(sync.Map)
-
-type handlers []http.Handler
-
-func httpCore(ctx context.Context, id func() int64, stmt *Stmt) *http.Server {
-	return &http.Server{
-		BaseContext: httpBaseCtx(ctx, id, stmt),
-	}
-}
-
-func httpBaseCtx(ctx context.Context, id func() int64, stmt *Stmt) func(net.Listener) context.Context {
-	servers := findServers(ctx, stmt)
-	return func(ls net.Listener) context.Context {
-		r := id() // assign a new id on any new connection.
-		baseCtx := context.WithValue(ctx, requestID{}, r)
-		setVariable(baseCtx, vRequestID, r)
-		baseCtx = context.WithValue(baseCtx, serverKey{}, servers(ls))
-		return baseCtx
-	}
-}
-
-func findServers(ctx context.Context, stmt *Stmt) func(net.Listener) []*Stmt {
-	var servers []*Stmt
-	var ok bool
-	return func(ls net.Listener) []*Stmt {
-		if ok {
-			return servers
-		}
-		for _, ch := range stmt.Blocks {
-			if ch.Directive == "server" {
-				if useServer(ctx, ch, ls) {
-					servers = append(servers, ch)
-				}
-			}
-		}
-		ok = true
-		return servers
-	}
-}
-
-func useServer(ctx context.Context, stmt *Stmt, ls net.Listener) bool {
-	for _, ch := range stmt.Blocks {
-		if ch.Directive == "listen" {
-			if matchListener(ch, ls.Addr()) {
-				return true
-			}
-		}
-	}
-	return defaultAddress(ctx, ls.Addr())
-}
-
-func matchListener(stmt *Stmt, addr net.Addr) bool {
-	return false
-}
-
-// returns true if add is bound  on the global default port. The
-// default port acts as global virtual server, any server that doe not have a
-// listen directive is listening on the default address.
-//
-// by default port 80 is used when running vince as root and 8000 is used when
-// running as non root user.
-func defaultAddress(ctx context.Context, addr net.Addr) bool {
-	if p := ctx.Value(defaultPortKey{}); p != nil {
-		return strings.HasSuffix(addr.String(), ":"+p.(string))
-	}
-	return false
-}
 
 type listenOpts struct {
 	net           string
