@@ -4,11 +4,8 @@ import (
 	"context"
 	"net"
 	"net/http"
-	"os"
 	"sync"
 	"sync/atomic"
-
-	"github.com/ergongate/vince/version"
 )
 
 type (
@@ -17,12 +14,9 @@ type (
 )
 
 type httpConnManager struct {
-	config  *Stmt
-	conns   *sync.Map
-	status  httpConnStatus
-	serial  func() int64
-	pid     int
-	version string
+	conns  *sync.Map
+	status httpConnStatus
+	serial func() int64
 }
 
 type connInfo struct {
@@ -59,10 +53,8 @@ func (c *httpConnStatus) Reset() httpConnStatus {
 
 func newHTTPConnManager(serial func() int64) *httpConnManager {
 	return &httpConnManager{
-		conns:   new(sync.Map),
-		pid:     os.Getpid(),
-		version: version.Version,
-		serial:  serial,
+		conns:  new(sync.Map),
+		serial: serial,
 	}
 }
 
@@ -189,9 +181,9 @@ func (m *httpConnManager) connContext(baseCtx context.Context, conn net.Conn) co
 	return baseCtx
 }
 
-func (m *httpConnManager) baseCtx(ls net.Listener) context.Context {
+func (m *httpConnManager) baseCtx(ctx context.Context, ls net.Listener) context.Context {
 	v := new(sync.Map)
-	baseCtx := context.WithValue(context.Background(), variables{}, v)
+	baseCtx := context.WithValue(ctx, variables{}, v)
 	baseCtx = context.WithValue(baseCtx, connManagerKey{}, m)
 	return baseCtx
 }

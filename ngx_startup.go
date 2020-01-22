@@ -6,9 +6,16 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync/atomic"
 )
 
 type serverCtxKey struct{}
+
+var serial int64
+
+func nextID() int64 {
+	return atomic.AddInt64(&serial, 1)
+}
 
 type rule struct {
 	parent   *rule
@@ -112,7 +119,7 @@ func startEverything(ctx context.Context, config *Stmt) error {
 		sctx.ls2[opts] = l
 	}
 	for opts, rules := range sctx.ls1 {
-		srv, err := createHTTPServer(context.WithValue(ctx, serverCtxKey{}, sctx), rules)
+		srv, err := createHTTPServer(context.WithValue(ctx, serverCtxKey{}, sctx), rules, opts)
 		if err != nil {
 			return err
 		}
@@ -146,8 +153,21 @@ func newSrvCtx() *serverCtx {
 	}
 }
 
-func createHTTPServer(ctx context.Context, rules []*rule) (*http.Server, error) {
-	return nil, nil
+func createHTTPServer(ctx context.Context, servers []*rule, opts *listenOpts) (*http.Server, error) {
+	s := &http.Server{}
+	opts.manager = newHTTPConnManager(nextID)
+	s.BaseContext = func(ls net.Listener) context.Context {
+		return opts.manager.baseCtx(ctx, ls)
+	}
+	s.ConnState = opts.manager.manageConnState
+	s.ConnContext = opts.manager.connContext
+	s.Handler = ngnxHandler(servers)
+	return s, nil
+}
+
+func ngnxHandler(servers []*rule) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	})
 }
 
 func findListener(r *rule, def *listenOpts, port string) *listenOpts {
