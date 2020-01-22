@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
@@ -12,6 +13,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"code.cloudfoundry.org/bytefmt"
@@ -20,6 +22,8 @@ import (
 type (
 	defaultPortKey struct{}
 )
+
+var tlsCache = new(sync.Map)
 
 type handlers []http.Handler
 
@@ -100,6 +104,22 @@ type listenOpts struct {
 	sslOpts sslOptions
 }
 
+var _ tls.ClientSessionCache = tlsClientCache{}
+
+type tlsClientCache struct{}
+
+func (tlsClientCache) Get(key string) (*tls.ClientSessionState, bool) {
+	v, ok := tlsCache.Load(key)
+	if !ok {
+		return nil, ok
+	}
+	return v.(*tls.ClientSessionState), ok
+}
+
+func (tlsClientCache) Put(key string, cs *tls.ClientSessionState) {
+	tlsCache.Store(key, cs)
+}
+
 type sslOptions struct {
 	bufferSize          intValue
 	certificate         stringValue
@@ -122,6 +142,41 @@ type sslOptions struct {
 	staplingResponder   stringValue
 	staplingVerify      boolValue
 	trustedCertificate  stringValue
+}
+
+func (ss sslOptions) config() (*tls.Config, error) {
+	cert, err := tls.LoadX509KeyPair(ss.certificate.value, ss.certificateKey.value)
+	if err != nil {
+		return nil, err
+	}
+	c := &tls.Config{Certificates: []tls.Certificate{cert}}
+	if ss.ciphers.set {
+		for _, f := range ss.ciphers.value {
+			c.CipherSuites = append(c.CipherSuites, standardCipherSuits[f])
+		}
+	}
+	if ss.preferServerCiphers.set {
+		c.PreferServerCipherSuites = ss.preferServerCiphers.value
+	}
+	if ss.sessionTickets.set {
+		c.SessionTicketsDisabled = !ss.sessionTickets.value
+	}
+	if ss.sessionTicketKey.set {
+		b, err := ioutil.ReadFile(ss.sessionTicketKey.value)
+		if err != nil {
+			return nil, err
+		}
+		var k [32]byte
+		copy(k[:], b)
+		c.SetSessionTicketKeys([][32]byte{k})
+	}
+	if ss.sessionCache.set {
+		c.ClientSessionCache = tlsClientCache{}
+	}
+	if ss.protocols.set {
+		c.NextProtos = append(c.NextProtos, ss.protocols.value...)
+	}
+	return c, nil
 }
 
 func (ss *sslOptions) init() {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"net"
 	"net/http"
 	"strings"
@@ -93,7 +94,18 @@ func startEverything(ctx context.Context, config *Stmt) error {
 		}
 	}()
 	for opts := range sctx.ls1 {
-		l, err := net.Listen(opts.net, opts.addrPort)
+		var l net.Listener
+		var err error
+		if opts.ssl {
+			c, err := opts.sslOpts.config()
+			if err != nil {
+				return err
+			}
+			l, err = tls.Listen(opts.net, opts.addrPort, c)
+		} else {
+			l, err = net.Listen(opts.net, opts.addrPort)
+		}
+		l, err = net.Listen(opts.net, opts.addrPort)
 		if err != nil {
 			return err
 		}
