@@ -3,6 +3,7 @@ module github.com/ergongate/vince
 go 1.12
 
 require (
+	code.cloudfoundry.org/bytefmt v0.0.0-20200121221524-a7ec01c286f4
 	github.com/dgraph-io/badger v1.6.0
 	github.com/kr/pretty v0.1.0 // indirect
 	github.com/labstack/echo/v4 v4.1.13

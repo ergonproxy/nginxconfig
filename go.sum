@@ -1,3 +1,5 @@
+code.cloudfoundry.org/bytefmt v0.0.0-20200121221524-a7ec01c286f4 h1:dWuEjLhHx+da7G3KdDDpbrxSDg1KOKvC/dd7DtX/aUE=
+code.cloudfoundry.org/bytefmt v0.0.0-20200121221524-a7ec01c286f4/go.mod h1:wN/zk7mhREp/oviagqUXY3EwuHhWyOvAdsn5Y4CzOrc=
 github.com/AndreasBriese/bbloom v0.0.0-20190306092124-e2d15f34fcf9 h1:HD8gA2tkByhMAwYaFAX9w2l7vxvBQ5NMoxDrkhqhtn4=
 github.com/AndreasBriese/bbloom v0.0.0-20190306092124-e2d15f34fcf9/go.mod h1:bOvUY6CB00SOBii9/FifXqc0awNKxLFCL/+pkDPuyl8=
 github.com/BurntSushi/toml v0.3.1 h1:WXkYYl6Yr3qBf1K79EBnL4mak0OimBfB0XUf9Vl28OQ=
