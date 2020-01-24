@@ -140,7 +140,7 @@ func startEverything(ctx context.Context, config *Stmt) error {
 	}
 	for k, rules := range sctx.ls1 {
 		opts := sctx.address[k]
-		srv, err := createHTTPServer(context.WithValue(ctx, serverCtxKey{}, sctx), rules, opts)
+		srv, err := createHTTPServer(context.WithValue(ctx, serverCtxKey{}, sctx.with(opts)), rules, opts)
 		if err != nil {
 			return err
 		}
