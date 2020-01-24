@@ -56,6 +56,21 @@ func (r *rule) collect(n *rule) []*rule {
 	return v
 }
 
+func overide(rules []*rule) []*rule {
+	m := make(map[string]int)
+	var remove []int
+	for k, v := range rules {
+		if i, ok := m[v.name]; ok {
+			remove = append(remove, i)
+		}
+		m[v.name] = k
+	}
+	for _, i := range remove {
+		rules = append(rules[:i], rules[i+1:]...)
+	}
+	return rules
+}
+
 func ruleFromStmt(stmt *Stmt, parent *rule) *rule {
 	r := &rule{name: stmt.Directive, parent: parent, args: stmt.Args}
 	for _, b := range stmt.Blocks {
