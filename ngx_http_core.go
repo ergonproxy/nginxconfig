@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"code.cloudfoundry.org/bytefmt"
@@ -551,13 +552,54 @@ func (s durationValue) merge(other durationValue) durationValue {
 	return s
 }
 
+type interfaceValue struct {
+	set   bool
+	value interface{}
+}
+
+func (s *interfaceValue) store(v interfaceValue) {
+	s.value = v
+	s.set = true
+}
+
+func (s interfaceValue) merge(other interfaceValue) interfaceValue {
+	if other.set {
+		s.value = other.value
+	}
+	return s
+}
+
+var ngxPort atomic.Value
+
+func defaultPort() string {
+	if v := ngxPort.Load(); v != nil {
+		return v.(string)
+	}
+	// try 80
+	p := "80"
+	l, err := net.Listen("tcp", ":"+p)
+	if err != nil {
+		p = "8000"
+		l, err = net.Listen("tcp", ":"+p)
+	}
+	if err != nil {
+		panic("vince: failed to bind to default port " + err.Error())
+	}
+	l.Close()
+	ngxPort.Store(p)
+	return p
+}
+
 func parseListen(r *rule, defaultPort string) listenOpts {
 	var ls listenOpts
 	if len(r.args) > 0 {
 		a := r.args[0]
 		if _, err := strconv.Atoi(a); err == nil {
 			ls.net = "tcp"
-			ls.addrPort = ":" + a
+			ls.addrPort = net.IPv4zero.String() + ":" + a
+		} else if ip := net.ParseIP(a); ip != nil {
+			ls.net = "tcp"
+			ls.addrPort = ip.String() + ":" + defaultPort
 		} else if h, p, err := net.SplitHostPort(a); err == nil {
 			if h == "unix" {
 				ls.net = h
@@ -568,7 +610,7 @@ func parseListen(r *rule, defaultPort string) listenOpts {
 			}
 		} else {
 			switch a {
-			case "localhost", "127.0.0.1", "[::]", "[::1]":
+			case "localhost", "[::]", "[::1]":
 				ls.net = "tcp"
 				ls.addrPort = a + ":" + defaultPort
 			default:

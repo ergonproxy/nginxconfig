@@ -5,7 +5,10 @@ import (
 	"crypto/tls"
 	"net"
 	"net/http"
+	"regexp"
+	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 )
 
@@ -87,10 +90,11 @@ func startEverything(ctx context.Context, config *Stmt) error {
 	}
 	for _, v := range servers {
 		ls := findListener(v, &defaultListener, "8000")
-		if a, ok := sctx.ls1[ls]; ok {
-			sctx.ls1[ls] = append(a, v)
+		sctx.address[ls.addrPort] = ls
+		if a, ok := sctx.ls1[ls.addrPort]; ok {
+			sctx.ls1[ls.addrPort] = append(a, v)
 		} else {
-			sctx.ls1[ls] = []*rule{v}
+			sctx.ls1[ls.addrPort] = []*rule{v}
 		}
 	}
 	// start lisenters
@@ -100,7 +104,8 @@ func startEverything(ctx context.Context, config *Stmt) error {
 			l.Close() // TODO:(gernest) handle error
 		}
 	}()
-	for opts := range sctx.ls1 {
+	for k := range sctx.ls1 {
+		opts := sctx.address[k]
 		var l net.Listener
 		var err error
 		if opts.ssl {
@@ -116,14 +121,15 @@ func startEverything(ctx context.Context, config *Stmt) error {
 		if err != nil {
 			return err
 		}
-		sctx.ls2[opts] = l
+		sctx.ls2[opts.addrPort] = l
 	}
-	for opts, rules := range sctx.ls1 {
+	for k, rules := range sctx.ls1 {
+		opts := sctx.address[k]
 		srv, err := createHTTPServer(context.WithValue(ctx, serverCtxKey{}, sctx), rules, opts)
 		if err != nil {
 			return err
 		}
-		sctx.ls3[opts] = srv
+		sctx.ls3[opts.addrPort] = srv
 	}
 
 	// we can start servers now
@@ -134,11 +140,13 @@ func startEverything(ctx context.Context, config *Stmt) error {
 }
 
 type serverCtx struct {
-	core   *rule
-	ls1    map[*listenOpts][]*rule
-	ls2    map[*listenOpts]net.Listener
-	ls3    map[*listenOpts]*http.Server
-	active *listenOpts
+	core          *rule
+	defaultServer map[string]*rule
+	address       map[string]*listenOpts
+	ls1           map[string][]*rule
+	ls2           map[string]net.Listener
+	ls3           map[string]*http.Server
+	active        *listenOpts
 }
 
 func (s *serverCtx) with(active *listenOpts) *serverCtx {
@@ -147,9 +155,10 @@ func (s *serverCtx) with(active *listenOpts) *serverCtx {
 
 func newSrvCtx() *serverCtx {
 	return &serverCtx{
-		ls1: make(map[*listenOpts][]*rule),
-		ls2: make(map[*listenOpts]net.Listener),
-		ls3: make(map[*listenOpts]*http.Server),
+		address: make(map[string]*listenOpts),
+		ls1:     make(map[string][]*rule),
+		ls2:     make(map[string]net.Listener),
+		ls3:     make(map[string]*http.Server),
 	}
 }
 
@@ -161,12 +170,221 @@ func createHTTPServer(ctx context.Context, servers []*rule, opts *listenOpts) (*
 	}
 	s.ConnState = opts.manager.manageConnState
 	s.ConnContext = opts.manager.connContext
-	s.Handler = ngnxHandler(servers)
+	s.Handler = ngnxHandler(ctx, servers)
 	return s, nil
 }
 
-func ngnxHandler(servers []*rule) http.Handler {
+func matchWildCard(s string, wild string) bool {
+	wp := strings.Split(wild, ".")
+	sp := strings.Split(s, ".")
+	if len(sp) < len(wp) {
+		return false
+	}
+	sidx := 0
+	widx := 0
+	for ; sidx < len(sp); sidx++ {
+		if wp[widx] == "*" {
+			continue
+		}
+		if !(widx < len(wp) && sp[sidx] == wp[widx]) {
+			return false
+		}
+		widx++
+	}
+	return true
+}
+
+func isWildCard(w string) bool {
+	if strings.IndexByte(w, '*') == -1 {
+		return false
+	}
+	start := strings.HasPrefix(w, "*.")
+	end := strings.HasSuffix(w, ".*")
+	return start || end
+}
+
+type locationMatch struct {
+	rules []*match
+}
+
+type matchKind uint
+
+const (
+	matchExact matchKind = iota
+	matchCaret
+	matchPrefix
+	matchRegexp
+)
+
+type match struct {
+	kind matchKind
+	rule *rule
+	re   *regexp.Regexp
+}
+
+func (ls *locationMatch) match(path string) *rule {
+	for i := 0; i < len(ls.rules); i++ {
+		if ls.rules[i].kind == matchExact && ls.rules[i].rule.args[1] == path {
+			return ls.rules[i].rule
+		}
+	}
+	var m []*match
+	for i := 0; i < len(ls.rules); i++ {
+		switch ls.rules[i].kind {
+		case matchPrefix, matchCaret:
+			if strings.HasPrefix(path, ls.rules[i].rule.args[1]) {
+				m = append(m, ls.rules[i])
+			}
+		}
+	}
+	var selected *match
+	if m != nil {
+		sort.Slice(m, func(i, j int) bool {
+			return m[i].rule.args[i] > m[i].rule.args[j]
+		})
+		selected = m[0]
+		if selected.kind == matchCaret {
+			return selected.rule
+		}
+	}
+	var up *locationMatch
+	if selected != nil {
+		up = new(locationMatch)
+		up.load(selected.rule)
+	}
+	if up != nil {
+		for i := 0; i < len(up.rules); i++ {
+			if up.rules[i].kind == matchRegexp {
+				if up.rules[i].re.MatchString(path) {
+					return up.rules[i].rule
+				}
+			}
+		}
+	}
+	for i := 0; i < len(up.rules); i++ {
+		if ls.rules[i].kind == matchRegexp {
+			if ls.rules[i].re.MatchString(path) {
+				return ls.rules[i].rule
+			}
+		}
+	}
+	if selected != nil {
+		return selected.rule
+	}
+	return nil
+}
+
+func (ls *locationMatch) load(srv *rule) {
+	for _, ch := range srv.children {
+		if ch.name == "location" {
+			switch len(ch.args) {
+			case 1:
+				ls.rules = append(ls.rules, &match{
+					kind: matchPrefix,
+					rule: ch,
+				})
+			case 2:
+				// with modifiers
+				switch ch.args[0] {
+				case "=":
+					ls.rules = append(ls.rules, &match{
+						kind: matchExact,
+						rule: ch,
+					})
+				case "~":
+					r := &match{rule: ch, kind: matchRegexp}
+					r.re = regexp.MustCompile(ch.args[1])
+					ls.rules = append(ls.rules, r)
+				case "~*":
+					r := &match{rule: ch, kind: matchRegexp}
+					r.re = regexp.MustCompile("(?i)" + ch.args[1])
+					ls.rules = append(ls.rules, r)
+				case "^~":
+					ls.rules = append(ls.rules, &match{
+						kind: matchCaret,
+						rule: ch,
+					})
+				}
+			}
+		}
+	}
+}
+
+func ngnxHandler(ctx context.Context, servers []*rule) http.Handler {
+	sctx := ctx.Value(serverCtxKey{}).(*serverCtx)
+	reg := make(map[*regexp.Regexp]*rule)
+	exact := make(map[string][]*rule)
+	wild := make(map[string]*rule)
+	for _, srv := range servers {
+		for _, ch := range srv.children {
+			if ch.name == "server_name" {
+				for _, a := range ch.args {
+					if a[0] == '~' {
+						re := regexp.MustCompile(a[1:])
+						reg[re] = srv
+						continue
+					}
+					if isWildCard(a) {
+						wild[a] = srv
+						continue
+					}
+					if v, ok := exact[a]; ok {
+						exact[a] = append(v, srv)
+					} else {
+						exact[a] = []*rule{srv}
+					}
+				}
+				break
+			}
+		}
+	}
+	find := func(name string) *rule {
+		if r, ok := exact[name]; ok {
+			return r[0]
+		}
+		if len(wild) > 0 {
+			var match string
+			for w := range wild {
+				if matchWildCard(name, w) {
+					if w > match {
+						match = w
+					}
+				}
+			}
+			if match != "" {
+				return wild[match]
+			}
+		}
+		for re, r := range reg {
+			if re.MatchString(name) {
+				return r
+			}
+		}
+		return sctx.defaultServer[sctx.active.addrPort]
+	}
+	location := new(sync.Map)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var srv *rule
+		if len(servers) == 1 {
+			srv = servers[0]
+		} else {
+			srv = find(r.Host)
+		}
+		if srv == nil {
+			srv = servers[0]
+		}
+		var loc *locationMatch
+		if v, ok := location.Load(srv); ok {
+			loc = v.(*locationMatch)
+		} else {
+			loc = new(locationMatch)
+			loc.load(srv)
+			location.Store(srv, loc)
+		}
+		if l := loc.match(r.URL.Path); l != nil {
+			// TODO serve the returned location block
+		}
+		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 	})
 }
 

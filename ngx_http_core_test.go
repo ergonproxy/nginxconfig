@@ -13,7 +13,7 @@ func TestParseListen(t *testing.T) {
 	}{
 		{[]string{"127.0.0.1:8000"}, "tcp", "127.0.0.1:8000"},
 		{[]string{"127.0.0.1"}, "tcp", "127.0.0.1:8000"},
-		{[]string{"8000"}, "tcp", ":8000"},
+		{[]string{"8000"}, "tcp", "0.0.0.0:8000"},
 		{[]string{"*:8000"}, "tcp", "*:8000"},
 		{[]string{"localhost:8000"}, "tcp", "localhost:8000"},
 		{[]string{"[::]:8000"}, "tcp", "[::]:8000"},
