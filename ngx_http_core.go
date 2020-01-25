@@ -571,16 +571,16 @@ func (s interfaceValue) merge(other interfaceValue) interfaceValue {
 
 var ngxPort atomic.Value
 
-func defaultPort() string {
+func defaultPort() int {
 	if v := ngxPort.Load(); v != nil {
-		return v.(string)
+		return v.(int)
 	}
 	// try 80
-	p := "80"
-	l, err := net.Listen("tcp", ":"+p)
+	p := 80
+	l, err := net.Listen("tcp", fmt.Sprintf(":%d", p))
 	if err != nil {
-		p = "8000"
-		l, err = net.Listen("tcp", ":"+p)
+		p = 8000
+		l, err = net.Listen("tcp", fmt.Sprintf(":%d", p))
 	}
 	if err != nil {
 		panic("vince: failed to bind to default port " + err.Error())

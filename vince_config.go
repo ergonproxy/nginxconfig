@@ -1,11 +1,14 @@
 package main
 
 import (
+	"errors"
 	"fmt"
-	"path"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/dgraph-io/badger/v2"
+	"github.com/urfave/cli/v2"
 )
 
 type vinceConfiguration struct {
@@ -17,6 +20,8 @@ type vinceConfiguration struct {
 
 	// vince.conf
 	confFile string
+
+	defaultPort int
 }
 
 type vinceDatabases struct {
@@ -56,7 +61,8 @@ func (db *vinceDatabases) init(dir string, opts badger.Options) (err error) {
 }
 
 func (db *vinceDatabases) open(opts badger.Options, dir ...string) (*badger.DB, error) {
-	opts.Dir = path.Join(dir...)
+	opts.Dir = filepath.Join(dir...)
+	opts.Logger = nil // don't log its very verbose
 	return badger.Open(opts)
 }
 
@@ -96,4 +102,32 @@ func (db *vinceDatabases) Close() error {
 		return fmt.Errorf("vince: error trying to close databases %q", strings.Join(errs, ","))
 	}
 	return nil
+}
+
+func getConfig(ctx *cli.Context) (*vinceConfiguration, error) {
+	file := ctx.String("c")
+	var c vinceConfiguration
+	c.defaultPort = ctx.Int("p")
+	if file != "" {
+		stat, err := os.Stat(file)
+		if err != nil {
+			return nil, err
+		}
+		if stat.IsDir() {
+			c.dir = file
+			c.confFile = filepath.Join(file, "vince.conf")
+		} else {
+			c.confFile = file
+			c.dir = filepath.Dir(file)
+		}
+	}
+	for _, file := range defaultConfigFiles() {
+		_, err := os.Stat(file)
+		if err == nil {
+			c.dir = filepath.Dir(file)
+			c.confFile = file
+			return &c, nil
+		}
+	}
+	return nil, errors.New("vince: missing configuration file")
 }

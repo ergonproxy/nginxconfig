@@ -3,13 +3,20 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"net"
 	"net/http"
+	"os"
+	"os/signal"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
+
+	"github.com/urfave/cli/v2"
 )
 
 type serverCtxKey struct{}
@@ -78,16 +85,10 @@ func ruleFromStmt(stmt *Stmt, parent *rule) *rule {
 	return r
 }
 
-type startupOptions struct {
-	defaultPort int
-}
-
-func startEverything(ctx context.Context, config *Stmt) error {
-	core := ruleFromStmt(config, nil)
-	sctx := newSrvCtx()
+func process(ctx context.Context, sctx *serverCtx, config *vinceConfiguration) error {
 	var servers []*rule
 	// main block
-	for _, base := range core.children {
+	for _, base := range sctx.core.children {
 		if base.name == "http" {
 			// http block
 			for _, child := range base.children {
@@ -98,26 +99,19 @@ func startEverything(ctx context.Context, config *Stmt) error {
 			}
 		}
 	}
-	defaultListener := listenOpts{
-		net:      "tcp",
-		addrPort: ":8000",
-	}
+
 	for _, v := range servers {
-		ls := findListener(v, &defaultListener, "8000")
-		sctx.address[ls.addrPort] = ls
-		if a, ok := sctx.ls1[ls.addrPort]; ok {
-			sctx.ls1[ls.addrPort] = append(a, v)
-		} else {
-			sctx.ls1[ls.addrPort] = []*rule{v}
+		for _, ls := range findListener(v, config.defaultPort) {
+			if _, ok := sctx.address[ls.addrPort]; !ok {
+				sctx.address[ls.addrPort] = &ls
+			}
+			if a, ok := sctx.ls1[ls.addrPort]; ok {
+				sctx.ls1[ls.addrPort] = append(a, v)
+			} else {
+				sctx.ls1[ls.addrPort] = []*rule{v}
+			}
 		}
 	}
-	// start lisenters
-	defer func() {
-		// make sure all listeners are closed before exiting
-		for _, l := range sctx.ls2 {
-			l.Close() // TODO:(gernest) handle error
-		}
-	}()
 	for k := range sctx.ls1 {
 		opts := sctx.address[k]
 		var l net.Listener
@@ -153,6 +147,55 @@ func startEverything(ctx context.Context, config *Stmt) error {
 	return nil
 }
 
+func startEverything(mainCtx context.Context, config *vinceConfiguration) error {
+	ctx, cancel := context.WithCancel(mainCtx)
+	defer cancel()
+	p := parse(config.confFile, defaultParseOpts())
+	if p.Errors != nil {
+		return fmt.Errorf("vince: parsing config %v", p.Errors)
+	}
+	d := &Stmt{Directive: "main"}
+	d.Blocks = p.Config[0].Parsed
+	core := ruleFromStmt(d, nil)
+	sctx := newSrvCtx()
+	sctx.core = core
+
+	defer func() {
+		// make sure all listeners are closed before exiting
+		for _, l := range sctx.ls2 {
+			l.Close() // TODO:(gernest) handle error
+		}
+	}()
+
+	if err := process(ctx, sctx, config); err != nil {
+		return err
+	}
+	ch := make(chan os.Signal, 2)
+	signal.Notify(
+		ch,
+		syscall.SIGTERM,
+		syscall.SIGINT,
+		syscall.SIGHUP,
+		syscall.SIGQUIT,
+		syscall.SIGUSR1,
+		syscall.SIGUSR2,
+		syscall.SIGWINCH,
+	)
+	for {
+		sig := <-ch
+		switch sig {
+		case syscall.SIGTERM, syscall.SIGINT:
+		case syscall.SIGQUIT:
+			fmt.Println("Shutting down")
+			return sctx.shutdown(ctx)
+		case syscall.SIGHUP:
+		case syscall.SIGUSR1:
+		case syscall.SIGUSR2:
+		case syscall.SIGWINCH:
+		}
+	}
+}
+
 type serverCtx struct {
 	core          *rule
 	defaultServer map[string]*rule
@@ -172,6 +215,19 @@ func (s *serverCtx) handle(r *rule) func(http.Handler) http.Handler {
 	default:
 		return nextHandler
 	}
+}
+
+func (s *serverCtx) shutdown(ctx context.Context) error {
+	var errs []string
+	for _, srv := range s.ls3 {
+		if err := srv.Shutdown(ctx); err != nil {
+			errs = append(errs, err.Error())
+		}
+	}
+	if errs != nil {
+		return fmt.Errorf("vince: error trying to graceful shutdown %q", strings.Join(errs, ","))
+	}
+	return nil
 }
 
 func (s *serverCtx) chain(r ...*rule) alice {
@@ -445,13 +501,22 @@ type noopHandler struct{}
 
 func (noopHandler) ServeHTTP(http.ResponseWriter, *http.Request) {}
 
-func findListener(r *rule, def *listenOpts, port string) *listenOpts {
-	o := *def
+func findListener(r *rule, port int) []listenOpts {
+	p := strconv.Itoa(port)
+	var ls []listenOpts
 	for _, v := range r.children {
 		if v.name == "listen" {
-			o = parseListen(v, port)
+			ls = append(ls, parseListen(v, p))
 			continue
 		}
 	}
-	return &o
+	return ls
+}
+
+func start(ctx *cli.Context) error {
+	c, err := getConfig(ctx)
+	if err != nil {
+		return err
+	}
+	return startEverything(context.Background(), c)
 }

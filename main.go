@@ -19,6 +19,7 @@ func main() {
 	app.Commands = []*cli.Command{
 		formatCommand(),
 	}
+	app.Action = start
 	err := app.Run(os.Args)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
