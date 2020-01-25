@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"math"
 	"sync"
 
@@ -12,8 +13,12 @@ import (
 
 var stablePrefix = []byte("/stable")
 var entryPrefix = []byte("/entry")
+var statePrefix = []byte("/state")
+
 var _ raft.StableStore = (*store)(nil)
 var _ raft.LogStore = (*store)(nil)
+
+var errUnknownCommand = errors.New("fsm: Unknown command")
 
 type firstKey struct{}
 
@@ -101,7 +106,7 @@ func (s *store) seekEntry(e *raft.Log, seekTo uint64, reverse bool) (uint64, err
 			return raft.ErrLogNotFound
 		}
 		item := itr.Item()
-		index = parseKeyIndex(item.Key())
+		index = parseEntryIndex(item.Key())
 		if e == nil {
 			return nil
 		}
@@ -157,7 +162,17 @@ func entryKey(key uint64) []byte {
 	return joinSlice(entryPrefix, b[:])
 }
 
-func parseKeyIndex(key []byte) uint64 {
+func stateKey(key uint64) []byte {
+	var b [8]byte
+	binary.BigEndian.PutUint64(b[:], key)
+	return joinSlice(stablePrefix, b[:])
+}
+
+func parseEntryIndex(key []byte) uint64 {
+	return binary.BigEndian.Uint64(key[len(entryPrefix):])
+}
+
+func parseStateIndex(key []byte) uint64 {
 	return binary.BigEndian.Uint64(key[len(entryPrefix):])
 }
 
@@ -173,7 +188,7 @@ func (s *store) deleteRage(batch *badger.WriteBatch, from, to uint64) error {
 
 		for itr.Seek(start); itr.Valid(); itr.Next() {
 			key := itr.Item().Key()
-			idx := parseKeyIndex(key)
+			idx := parseEntryIndex(key)
 			if idx > to {
 				break
 			}
@@ -206,4 +221,39 @@ func (s *store) deleteKeys(batch *badger.WriteBatch, keys []string) error {
 		}
 	}
 	return nil
+}
+
+type fsm struct {
+	db *badger.DB
+}
+
+func (f *fsm) Apply(e *raft.Log) interface{} {
+	var c command
+	if err := json.Unmarshal(e.Data, &c); err != nil {
+		return err
+	}
+	switch c.Op {
+	case "set":
+		return f.db.Update(func(txn *badger.Txn) error {
+			return txn.Set([]byte(c.Key), []byte(c.Value))
+		})
+	case "get":
+		var result string
+		err := f.db.View(func(txn *badger.Txn) error {
+			k, err := txn.Get([]byte(c.Key))
+			if err != nil {
+				return err
+			}
+			return k.Value(func(val []byte) error {
+				result = string(val)
+				return nil
+			})
+		})
+		if err != nil {
+			return err
+		}
+		return result
+	default:
+		return errUnknownCommand
+	}
 }
