@@ -17,6 +17,7 @@ var statePrefix = []byte("/state")
 
 var _ raft.StableStore = (*store)(nil)
 var _ raft.LogStore = (*store)(nil)
+var _ raft.FSMSnapshot = (*fsmSnapshot)(nil)
 
 var errUnknownCommand = errors.New("fsm: Unknown command")
 
@@ -257,3 +258,25 @@ func (f *fsm) Apply(e *raft.Log) interface{} {
 		return errUnknownCommand
 	}
 }
+
+type snapostSince interface {
+	since() uint64
+	save(uint64)
+}
+
+type fsmSnapshot struct {
+	stream *badger.Stream
+	since  snapostSince
+}
+
+func (fs *fsmSnapshot) Persist(w raft.SnapshotSink) error {
+	n, err := fs.stream.Backup(w, fs.since.since())
+	if err != nil {
+		w.Cancel()
+		return err
+	}
+	fs.since.save(n)
+	return w.Close()
+}
+
+func (fs *fsmSnapshot) Release() {}
