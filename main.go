@@ -16,6 +16,9 @@ func main() {
 	app.Flags = []cli.Flag{
 		&configFlag,
 	}
+	app.Commands = []*cli.Command{
+		formatCommand(),
+	}
 	err := app.Run(os.Args)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
