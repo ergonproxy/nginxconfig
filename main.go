@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/urfave/cli/v2"
 )
@@ -12,6 +13,9 @@ func main() {
 	app.Name = "vince"
 	app.Description = descriptionText
 	app.Usage = "Modern reverse proxy for modern traffick"
+	app.Flags = []cli.Flag{
+		&configFlag,
+	}
 	err := app.Run(os.Args)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -23,3 +27,19 @@ const descriptionText = `
 vince is a modern reverse proxy for http,tcp,udp,unix socket .. etc protocols with
 modern tools for building and managing high performance , highly available services.
 `
+
+var configFlag = cli.StringFlag{
+	Name:        "c",
+	Usage:       "Configuration file",
+	EnvVars:     []string{"VINCE_CONFIG"},
+	TakesFile:   true,
+	DefaultText: strings.Join(defaultConfigFiles(), " or "),
+}
+
+func defaultWorkDirectories() []string {
+	return []string{"/usr/local/vince", " /etc/vince", "/usr/local/etc/vince"}
+}
+
+func defaultConfigFiles() []string {
+	return []string{"/usr/local/vince/conf/vince.conf", " /etc/vince/vince.conf", "/usr/local/etc/vince/vince.conf"}
+}
