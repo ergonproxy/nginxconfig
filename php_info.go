@@ -44,5 +44,4 @@ func parsePHPInfo(src io.Reader) (info phpInfo) {
 			sec = append(sec, o)
 		}
 	}
-	return
 }
