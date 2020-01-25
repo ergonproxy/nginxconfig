@@ -10,7 +10,10 @@ require (
 	github.com/mikioh/tcp v0.0.0-20190314235350-803a9b46060c
 	github.com/mikioh/tcpinfo v0.0.0-20190314235526-30a79bb1804b
 	github.com/mikioh/tcpopt v0.0.0-20190314235656-172688c1accc // indirect
+	github.com/onsi/ginkgo v1.11.0 // indirect
+	github.com/onsi/gomega v1.8.1 // indirect
 	github.com/open-policy-agent/opa v0.16.0
 	github.com/sourcegraph/jsonrpc2 v0.0.0-20191222043438-96c4efab7ee2
+	github.com/urfave/cli/v2 v2.1.1
 	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
 )
