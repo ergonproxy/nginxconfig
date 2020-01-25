@@ -1,12 +1,12 @@
 package main
 
-import "github.com/dgraph-io/badger/v2"
+import (
+	"fmt"
+	"path"
+	"strings"
 
-import "fmt"
-
-import "strings"
-
-import "path"
+	"github.com/dgraph-io/badger/v2"
+)
 
 type vinceConfiguration struct {
 	// The working directory where vince stores configuration and all the databases
