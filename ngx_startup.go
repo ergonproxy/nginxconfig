@@ -41,7 +41,6 @@ func (r rule) String() string {
 func (r *rule) collect(n *rule) []*rule {
 	var v []*rule
 	if n == nil {
-		v = r.children
 	} else {
 		for _, a := range r.children {
 			if a.name == n.name {
@@ -166,6 +165,25 @@ type serverCtx struct {
 
 func (s *serverCtx) with(active *listenOpts) *serverCtx {
 	return &serverCtx{core: s.core, ls1: s.ls1, ls2: s.ls2, ls3: s.ls3, active: active}
+}
+
+func (s *serverCtx) handle(r *rule) func(http.Handler) http.Handler {
+	switch r.name {
+	default:
+		return nextHandler
+	}
+}
+
+func (s *serverCtx) chain(r ...*rule) alice {
+	var a alice
+	for _, v := range r {
+		a = append(a, s.handle(v))
+	}
+	return a
+}
+
+func nextHandler(next http.Handler) http.Handler {
+	return next
 }
 
 func newSrvCtx() *serverCtx {
@@ -379,6 +397,9 @@ func ngnxHandler(ctx context.Context, servers []*rule) http.Handler {
 	}
 	location := new(sync.Map)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		variable := ctx.Value(variables{}).(*sync.Map)
+		setRequestVariables(variable, r)
 		var srv *rule
 		if len(servers) == 1 {
 			srv = servers[0]
@@ -397,11 +418,32 @@ func ngnxHandler(ctx context.Context, servers []*rule) http.Handler {
 			location.Store(srv, loc)
 		}
 		if l := loc.match(r.URL.Path); l != nil {
-			// TODO serve the returned location block
+			c := l.collect(nil)
+			// we start by executing child block
+			block := sctx.chain(l.children...)
+			// then we traverse the parents
+			parent := sctx.chain(overide(c)...)
+			block.then(parent.then(noopHandler{})).ServeHTTP(w, r)
 		}
 		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 	})
 }
+
+type alice []func(http.Handler) http.Handler
+
+func (a alice) then(h http.Handler) http.Handler {
+	if h == nil {
+		h = noopHandler{}
+	}
+	for i := range a {
+		h = a[len(a)-1-i](h)
+	}
+	return h
+}
+
+type noopHandler struct{}
+
+func (noopHandler) ServeHTTP(http.ResponseWriter, *http.Request) {}
 
 func findListener(r *rule, def *listenOpts, port string) *listenOpts {
 	o := *def

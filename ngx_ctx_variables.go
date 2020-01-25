@@ -176,6 +176,7 @@ type variableFunc func() interface{}
 
 func createVariables() *sync.Map {
 	m := new(sync.Map)
+	setTimeVariables(m)
 	return m
 }
 
