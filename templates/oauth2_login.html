@@ -1,0 +1,47 @@
+<!doctype html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    {{if .Title}}
+    <title>{{.Title}}</title>
+    {{else}}
+    <title>vince oauth2 login </title>
+    {{end}}
+    <meta name="viewport" content="width=device-width">
+    <!--[if lt IE 9]>
+    <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+</head>
+
+<body>
+    <div class="wrapper">
+        <header>
+            <a href="/">
+                <h1>Hero</h1>
+            </a>
+            <p>OAUTH 2 Provider</p>
+            <ul>
+                <li><a href="/login"> <strong>Login</strong></a></li>
+                <li><a href="/register"><strong>Register</strong></a></li>
+                <li><a href="http://github.com/gernest/hero"><strong> GitHub</strong></a></li>
+            </ul>
+        </header>
+
+        <body>
+            <section>
+                <form method="post" action="{{.Action}}">
+                    <p><input type="text" name="login_username" value="" placeholder="Username or Email"></p>
+                    <p><input type="password" name="login_password" value="" placeholder="Password"></p>
+                    <p><input type="submit" name="commit" value="Login"></p>
+                </form>
+            </section>
+        </body>
+
+        <footer>
+        </footer>
+    </div>
+</body>
+
+</html>

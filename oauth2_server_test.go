@@ -12,7 +12,7 @@ func TestOauth2Context(t *testing.T) {
 	ctx.init()
 	link := "http://www.example.com"
 
-	ctx.setErrURI(oauth2ErrInvalidClient.String(), "", link, "")
+	ctx.setErrURI(oauth2ErrInvalidClient, "", link, "")
 	ctx.setRedirect(link)
 	rdir, err := ctx.getRedirectURL()
 	if err != nil {
