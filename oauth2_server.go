@@ -99,9 +99,9 @@ type oauth2Grant struct {
 	Type           string
 	UserID         string
 	ClientID       oauth2ClientID
-	AccessToken    oauth2Token
-	AuthorizeToken oauth2Token
-	RefreshToken   oauth2Token
+	AccessToken    uint64
+	AuthorizeToken uint64
+	RefreshToken   uint64
 	Scope          string
 	State          string
 	RedirectURL    string
@@ -115,20 +115,18 @@ type oauth2Client struct {
 	UserID      int64
 	Name        string
 	Secret      string
-	Grants      []*oauth2Grant
-	Tokens      []*oauth2Token
+	Grants      []uint64
+	Tokens      []uint64
 	RedirectURL string
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 }
 
 type oauth2User struct {
-	ID        uint64
-	UserName  string
 	Email     string
-	Grants    []*oauth2Grant
-	Tokens    []*oauth2Token
-	Clients   []*oauth2Client
+	Grants    []uint64
+	Tokens    []uint64
+	Clients   []string
 	Password  string
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -351,13 +349,19 @@ func (o *oauth2) authorize(w http.ResponseWriter, r *http.Request) error {
 		grant.Scope = scope
 		grant.State = state
 		grant.ClientID = client.ID
-		usr.Grants = append(usr.Grants, grant)
+		grant.UserID = usr.Email
+		if err := o.saveGrant(grant); err != nil {
+			ctx.setErrState(oauth2ErrServerError, "", state)
+			ctx.internalErr = err
+			return ctx.commit(w)
+		}
+		usr.Grants = append(usr.Grants, grant.ID)
 		if err = o.saveUser(usr); err != nil {
 			ctx.setErrState(oauth2ErrServerError, "", state)
 			ctx.internalErr = err
 			return ctx.commit(w)
 		}
-		client.Grants = append(client.Grants, grant)
+		client.Grants = append(client.Grants, grant.ID)
 		if err = o.saveClient(client); err != nil {
 			ctx.setErrState(oauth2ErrServerError, "", state)
 			ctx.internalErr = err
@@ -375,7 +379,7 @@ func (o *oauth2) authorize(w http.ResponseWriter, r *http.Request) error {
 		grant.State = state
 		grant.RedirectURL = redirectURI
 		grant.ClientID = client.ID
-		grant.UserID = usr.UserName
+		grant.UserID = usr.Email
 		if err = o.finalize(grant, &ctx, usr); err != nil {
 			ctx.setErrState(oauth2ErrServerError, "", state)
 			ctx.internalErr = err
@@ -392,19 +396,12 @@ func (o *oauth2) authorize(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (o *oauth2) saveUser(usr *oauth2User) error {
-	var err error
-	if usr.ID == 0 {
-		usr.ID, err = o.store.serial()
-		if err != nil {
-			return err
-		}
-	}
 	usr.UpdatedAt = time.Now()
 	b, err := json.Marshal(usr)
 	if err != nil {
 		return err
 	}
-	return o.store.set(joinSlice(oauth2UserPrefix, []byte(usr.UserName)), b)
+	return o.store.set(joinSlice(oauth2UserPrefix, []byte(usr.Email)), b)
 }
 
 func (o *oauth2) saveClient(c *oauth2Client) error {
@@ -480,16 +477,16 @@ func (o *oauth2) finalize(auth *oauth2Grant, ctx *oauth2Context, usr *oauth2User
 		return err
 	}
 
-	access.AccessToken = genAccessToken
-	access.RefreshToken = genRefreshToken
+	access.AccessToken = genAccessToken.ID
+	access.RefreshToken = genRefreshToken.ID
 
 	if err := o.saveGrant(access); err != nil {
 		return err
 	}
-	ctx.data[oauth2ParamAccessToken] = access.AccessToken.Code
+	ctx.data[oauth2ParamAccessToken] = genAccessToken.Code
 	ctx.data[oauth2ParamTokenType] = o.tokenType
 	ctx.data[oauth2ParamExpiresIn] = access.ExpiresIn
-	ctx.data[oauth2ParamRefreshToken] = access.RefreshToken.Code
+	ctx.data[oauth2ParamRefreshToken] = genRefreshToken.Code
 	if access.Scope != "" {
 		ctx.data[oauth2ParamScope] = access.Scope
 	}
@@ -508,9 +505,10 @@ func (o *oauth2) claims(usr *oauth2User) jwt.StandardClaims {
 	return jwt.StandardClaims{
 		ExpiresAt: now.Add(365 * 24 * time.Hour).Unix(),
 		IssuedAt:  now.Unix(),
-		Issuer:    usr.UserName,
+		Issuer:    usr.Email,
 	}
 }
+
 func validateURIList(baseList, redir, sep string) error {
 	var list []string
 	if sep != "" {
