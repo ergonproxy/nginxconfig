@@ -3,3 +3,4 @@ These are projects which I took inspiration from, in the form of implementation 
 or ideas.
 
 - https://github.com/square/ghostunnel : For tcp/udp proxying.
+- https://github.com/nginxinc/crossplane all config parsing code is a port from this project
