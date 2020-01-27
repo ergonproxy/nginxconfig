@@ -1,7 +1,7 @@
 package main
 
 import (
-	"os"
+	"net/http"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -58,7 +58,7 @@ type payload struct {
 	Config []*parsingContext
 }
 
-func parseInternal(parsing *parsingContext, tokens *tokenIter, ctx []string, consume bool) []*Stmt {
+func parseInternal(fs http.FileSystem, parsing *parsingContext, tokens *tokenIter, ctx []string, consume bool) []*Stmt {
 	var parsed []*Stmt
 	for token := tokens.next(); token != nil; token = tokens.next() {
 		var commentsInArgs []string
@@ -67,7 +67,7 @@ func parseInternal(parsing *parsingContext, tokens *tokenIter, ctx []string, con
 		}
 		if consume {
 			if token.text == "{" && !token.quote {
-				parseInternal(parsing, tokens, nil, true)
+				parseInternal(fs, parsing, tokens, nil, true)
 				continue
 			}
 		}
@@ -104,7 +104,7 @@ func parseInternal(parsing *parsingContext, tokens *tokenIter, ctx []string, con
 		}
 		if parsing.opts.ignore != nil && parsing.opts.ignore(stmt.Directive) {
 			if token.text == "{" && !token.quote {
-				parseInternal(parsing, tokens, nil, true)
+				parseInternal(fs, parsing, tokens, nil, true)
 			}
 			continue
 		}
@@ -136,7 +136,7 @@ func parseInternal(parsing *parsingContext, tokens *tokenIter, ctx []string, con
 					sort.Strings(filenames)
 				}
 			} else {
-				f, err := os.Open(pattern)
+				f, err := fs.Open(pattern)
 				if err != nil {
 					parsing.handleErr(
 						&NgxError{
@@ -173,6 +173,7 @@ func parseInternal(parsing *parsingContext, tokens *tokenIter, ctx []string, con
 		}
 		if token.text == "{" && !token.quote {
 			stmt.Blocks = parseInternal(
+				fs,
 				parsing, tokens,
 				enterBlock(stmt, ctx),
 				false,
@@ -240,7 +241,7 @@ func (i *includeIter) next() *fileCtx {
 	return nil
 }
 
-func parse(filename string, opts *parseOpts) *payload {
+func parse(filename string, fs http.FileSystem, opts *parseOpts) *payload {
 	opts.configDir = filepath.Dir(filename)
 	opts.includes = append(opts.includes, fileCtx{name: filename})
 	opts.included = map[string]int{
@@ -255,7 +256,7 @@ func parse(filename string, opts *parseOpts) *payload {
 	}
 	it := &includeIter{opts: opts}
 	for f := it.next(); f != nil; f = it.next() {
-		parsing, err := parseInclude(opts, f)
+		parsing, err := parseInclude(fs, opts, f)
 		if err != nil {
 			pld.Status = "failed"
 			pld.Errors = append(pld.Errors, err)
@@ -268,23 +269,23 @@ func parse(filename string, opts *parseOpts) *payload {
 	return pld
 }
 
-func parseInclude(opts *parseOpts, f *fileCtx) (*parsingContext, error) {
+func parseInclude(fs http.FileSystem, opts *parseOpts, f *fileCtx) (*parsingContext, error) {
 	parsing := &parsingContext{
 		File:   f.name,
 		Status: "ok",
 		opts:   opts,
 	}
-	fs, err := os.Open(f.name)
+	file, err := fs.Open(f.name)
 	if err != nil {
 		return nil, err
 	}
-	defer fs.Close()
-	tokens, err := lex(fs, f.name)
+	defer file.Close()
+	tokens, err := lex(file, f.name)
 	if err != nil {
 		return nil, err
 	}
 	it := &tokenIter{tokens: tokens}
-	parsing.Parsed = parseInternal(parsing, it, f.ctx, false)
+	parsing.Parsed = parseInternal(fs, parsing, it, f.ctx, false)
 	return parsing, nil
 }
 

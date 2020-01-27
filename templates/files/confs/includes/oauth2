@@ -1,0 +1,18 @@
+oauth2_redirect_separator "";
+oauth2_authorization_expire 200;
+oauth2_access_expire 200;
+oauth2_allow_get_access off;
+oauth2_allowed_access_type authorization_code , refresh_token , password , client_credentials , assertion;
+oauth2_token_type Bearer;
+oauth2_provider_name vince;
+oauth2_auth_endpoint /authorize;
+oauth2_token_endpoint /tokens;
+oauth2_info_endpoint /info;
+oauth2_session_path /;
+oauth2_session_max_age 2592000;
+oauth2_session_domain "";
+oauth2_session_secure off;
+oauth2_session_hhhponly off;
+oauth2_session_name __vince_proxy;
+oauth2_session_same_site 1;
+oauth2_csrf_secret "";

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/binary"
 	"encoding/hex"
@@ -15,7 +16,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/v2"
-	"github.com/dgrijalva/jwt-go"
+	"github.com/ergongate/vince/templates"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -82,6 +83,7 @@ var oauth2ClientPrefix = []byte("/client/")
 var oauth2UserPrefix = []byte("/user/")
 var oauth2GrantPrefix = []byte("/grant/")
 var oauth2TokenPrefix = []byte("/token/")
+var oauth2CSRFTokenPrefix = []byte("/csrf/")
 
 type oauth2Token struct {
 	ID        uint64
@@ -160,10 +162,100 @@ type oauth2 struct {
 	store             kvStore
 	redirectSeparator string
 	templates         *template.Template
-	tokens            *jwtTokenGen
-	expires           int64
-	tokenType         string
+	opts              oauth2Option
 }
+
+func (o *oauth2) init(store kvStore, opts oauth2Option) error {
+	tpl, err := templates.HTML()
+	if err != nil {
+		return err
+	}
+	csrf, err := store.get(oauth2CSRFTokenPrefix)
+	if err != nil {
+		return err
+	}
+	if err == nil {
+		if opts.CsrfSecret != nil {
+			if !bytes.Equal(csrf, opts.CsrfSecret) {
+				if err := store.set(oauth2CSRFTokenPrefix, []byte(opts.CsrfSecret)); err != nil {
+					return err
+				}
+			}
+		} else {
+			opts.CsrfSecret = csrf
+		}
+	} else {
+		if err != badger.ErrKeyNotFound {
+			return err
+		}
+		if opts.CsrfSecret == nil {
+			var secret [32]byte
+			_, err := rand.Read(secret[:])
+			if err != nil {
+				return err
+			}
+			opts.CsrfSecret = secret[:]
+			if err != nil {
+				return err
+			}
+			if err := store.set(oauth2CSRFTokenPrefix, []byte(opts.CsrfSecret)); err != nil {
+				return err
+			}
+		}
+	}
+	o.templates = tpl
+	o.opts = opts
+	return nil
+}
+
+func generateCSRFToken() (string, error) {
+	var secret [32]byte
+	_, err := rand.Read(secret[:])
+	if err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(secret[:]), nil
+}
+
+type oauth2Option struct {
+	RedirSeparator      string   `json:"redirect_separator"`
+	AuthorizationExpire int64    `json:"authorization_expire"`
+	AccessExpire        int64    `json:"access_expire"`
+	AllowGetAccess      bool     `json:"allow_get_access"`
+	AllowedAccessType   []string `json:"allowed_access_type"`
+	TokenType           string   `json:"token_type"`
+	ProviderName        string   `json:"provider_name"`
+	AuthEndpoint        string   `json:"auth_endpoint"`
+	TokenEndpoint       string   `json:"token_endpoint"`
+	InfoEndpoint        string   `json:"info_endpoint"`
+	Session             struct {
+		Path     string        `json:"session_path"`
+		MaxAge   int           `json:"session_max_age"`
+		Domain   string        `json:"session_domain"`
+		Secure   bool          `json:"session_secure"`
+		HTTPOnly bool          `json:"session_hhhponly"`
+		Name     string        `json:"session_name"`
+		SameSite http.SameSite `json:"session_same_site"`
+	}
+	CsrfSecret []byte `json:"csrf_secret"`
+}
+
+func (o *oauth2Option) init() {
+	o.AllowedAccessType = []string{"authorization_code", "refresh_token", "password", "client_credentials", "assertion"}
+	o.TokenType = "Bearer"
+	o.AuthorizationExpire = 200
+	o.AccessExpire = 200
+	o.AuthEndpoint = "/authorize"
+	o.TokenEndpoint = "/tokens"
+	o.InfoEndpoint = "/info"
+}
+
+func (o *oauth2Option) load(r *rule) error {
+	switch r.name {
+	}
+	return nil
+}
+
 type oauth2ResponseType uint
 
 const (
@@ -291,6 +383,15 @@ func createClientID() oauth2ClientID {
 	return oauth2ClientID(hex.EncodeToString(b[:]))
 }
 
+func (o *oauth2) generate() (string, error) {
+	var b [256]byte
+	_, err := rand.Read(b[:])
+	if err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b[:]), nil
+}
+
 func (o *oauth2) authorize(w http.ResponseWriter, r *http.Request) error {
 	_ = r.ParseForm()
 	var ctx oauth2Context
@@ -344,8 +445,14 @@ func (o *oauth2) authorize(w http.ResponseWriter, r *http.Request) error {
 	}
 	switch reqTyp {
 	case "code":
+		code, err := o.generate()
+		if err != nil {
+			ctx.setErrState(oauth2ErrServerError, "", state)
+			ctx.internalErr = err
+			return ctx.commit(w)
+		}
 		grant := new(oauth2Grant)
-		grant.Code = o.tokens.Generate(o.claims(usr))
+		grant.Code = code
 		grant.Scope = scope
 		grant.State = state
 		grant.ClientID = client.ID
@@ -371,9 +478,15 @@ func (o *oauth2) authorize(w http.ResponseWriter, r *http.Request) error {
 		ctx.data[oauth2ParamState] = state
 		return ctx.commit(w)
 	case "token":
+		code, err := o.generate()
+		if err != nil {
+			ctx.setErrState(oauth2ErrServerError, "", state)
+			ctx.internalErr = err
+			return ctx.commit(w)
+		}
 		ctx.redirectInFragment = true
 		grant := new(oauth2Grant)
-		grant.Code = o.tokens.Generate(o.claims(usr))
+		grant.Code = code
 		grant.Type = oauth2GrantTypeImplicit
 		grant.Scope = scope
 		grant.State = state
@@ -456,10 +569,13 @@ func (o *oauth2) finalize(auth *oauth2Grant, ctx *oauth2Context, usr *oauth2User
 	access.RedirectURL = auth.RedirectURL
 	access.Scope = auth.Scope
 	access.State = auth.State
-	access.ExpiresIn = o.expires
-
+	access.ExpiresIn = o.opts.AccessExpire
+	code, err := o.generate()
+	if err != nil {
+		return err
+	}
 	genAccessToken := oauth2Token{
-		Code:     o.tokens.Generate(o.claims(usr)),
+		Code:     code,
 		ClientID: auth.ClientID,
 		UserID:   auth.UserID,
 	}
@@ -467,9 +583,13 @@ func (o *oauth2) finalize(auth *oauth2Grant, ctx *oauth2Context, usr *oauth2User
 	if err := o.saveToken(&genAccessToken); err != nil {
 		return err
 	}
+	code, err = o.generate()
+	if err != nil {
+		return err
+	}
 
 	genRefreshToken := oauth2Token{
-		Code:     o.tokens.Generate(o.claims(usr)),
+		Code:     code,
 		ClientID: auth.ClientID,
 		UserID:   auth.UserID,
 	}
@@ -484,7 +604,7 @@ func (o *oauth2) finalize(auth *oauth2Grant, ctx *oauth2Context, usr *oauth2User
 		return err
 	}
 	ctx.data[oauth2ParamAccessToken] = genAccessToken.Code
-	ctx.data[oauth2ParamTokenType] = o.tokenType
+	ctx.data[oauth2ParamTokenType] = o.opts.TokenType
 	ctx.data[oauth2ParamExpiresIn] = access.ExpiresIn
 	ctx.data[oauth2ParamRefreshToken] = genRefreshToken.Code
 	if access.Scope != "" {
@@ -498,15 +618,6 @@ func (o *oauth2) finalize(auth *oauth2Grant, ctx *oauth2Context, usr *oauth2User
 
 func (o *oauth2) remove(prefix []byte, id uint64) error {
 	return o.store.remove(o.key(prefix, id))
-}
-
-func (o *oauth2) claims(usr *oauth2User) jwt.StandardClaims {
-	now := time.Now()
-	return jwt.StandardClaims{
-		ExpiresAt: now.Add(365 * 24 * time.Hour).Unix(),
-		IssuedAt:  now.Unix(),
-		Issuer:    usr.Email,
-	}
 }
 
 func validateURIList(baseList, redir, sep string) error {

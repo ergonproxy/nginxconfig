@@ -8,6 +8,8 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+//go:generate statik -p templates  -f -src ./templates/files/
+
 func main() {
 	app := cli.NewApp()
 	app.Name = "vince"

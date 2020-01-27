@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"os"
 
+	"github.com/ergongate/vince/templates"
 	"github.com/urfave/cli/v2"
 )
 
@@ -19,10 +20,15 @@ type formatOption struct {
 func format(file string, opts formatOption) error {
 	cfg := defaultParseOpts()
 	cfg.comments = true
-	p := parse(file, cfg)
+	fs, err := templates.NewIncludeFS()
+	if err != nil {
+		return err
+	}
+	p := parse(file, fs, cfg)
 	if p.Errors != nil {
 		return p.Errors[0]
 	}
+
 	if opts.json {
 		b, err := json.Marshal(p.Config[0])
 		if err != nil {

@@ -16,6 +16,7 @@ import (
 	"sync/atomic"
 	"syscall"
 
+	"github.com/ergongate/vince/templates"
 	"github.com/urfave/cli/v2"
 )
 
@@ -150,7 +151,11 @@ func process(ctx context.Context, sctx *serverCtx, config *vinceConfiguration) e
 func startEverything(mainCtx context.Context, config *vinceConfiguration) error {
 	ctx, cancel := context.WithCancel(mainCtx)
 	defer cancel()
-	p := parse(config.confFile, defaultParseOpts())
+	fs, err := templates.NewIncludeFS()
+	if err != nil {
+		return err
+	}
+	p := parse(config.confFile, fs, defaultParseOpts())
 	if p.Errors != nil {
 		return fmt.Errorf("vince: parsing config %v", p.Errors)
 	}

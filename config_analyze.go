@@ -29,25 +29,26 @@ const (
 	NGXConfTake1234 = (NGXConfTake123 | NGXConfTake4)
 
 	// bit masks for different directive locations
-	NGXDirectConf     = 0x00010000 // main file (not used)
-	NGXMainConf       = 0x00040000 // main context
-	NGXEventConf      = 0x00080000 // events
-	NGXMailMainConf   = 0x00100000 // mail
-	NGXMailSrvConf    = 0x00200000 // mail > server
-	NGXStreamMainConf = 0x00400000 // stream
-	NGXStreamSrvConf  = 0x00800000 // stream > server
-	NGXStreamUpsConf  = 0x01000000 // stream > upstream
-	NGXHttpMainConf   = 0x02000000 // http
-	NGXHttpSrvConf    = 0x04000000 // http > server
-	NGXHttpLocConf    = 0x08000000 // http > location
-	NGXHttpUpsConf    = 0x10000000 // http > upstream
-	NGXHttpSifConf    = 0x20000000 // http > server > if
-	NGXHttpLifConf    = 0x40000000 // http > location > if
-	NGXHttpLmtConf    = 0x80000000 // http > location > limit_except
+	NGXDirectConf     = 0x00010000  // main file (not used)
+	NGXMainConf       = 0x00040000  // main context
+	NGXEventConf      = 0x00080000  // events
+	NGXMailMainConf   = 0x00100000  // mail
+	NGXMailSrvConf    = 0x00200000  // mail > server
+	NGXStreamMainConf = 0x00400000  // stream
+	NGXStreamSrvConf  = 0x00800000  // stream > server
+	NGXStreamUpsConf  = 0x01000000  // stream > upstream
+	NGXHttpMainConf   = 0x02000000  // http
+	NGXHttpSrvConf    = 0x04000000  // http > server
+	NGXHttpLocConf    = 0x08000000  // http > location
+	NGXHttpUpsConf    = 0x10000000  // http > upstream
+	NGXHttpSifConf    = 0x20000000  // http > server > if
+	NGXHttpLifConf    = 0x40000000  // http > location > if
+	NGXHttpLmtConf    = 0x80000000  // http > location > limit_except
+	NGXHttpOauth2Conf = 0x100000000 // http > oauth2
 
 	NGXAnyConf = (NGXMainConf | NGXEventConf | NGXMailMainConf | NGXMailSrvConf |
 		NGXStreamMainConf | NGXStreamSrvConf | NGXStreamUpsConf |
-		NGXHttpMainConf | NGXHttpSrvConf | NGXHttpLocConf | NGXHttpUpsConf)
+		NGXHttpMainConf | NGXHttpSrvConf | NGXHttpLocConf | NGXHttpUpsConf | NGXHttpOauth2Conf)
 )
 
 var directives = map[string][]int{
@@ -569,6 +570,23 @@ var directives = map[string][]int{
 	"open_log_file_cache": []int{
 		NGXHttpMainConf | NGXHttpSrvConf | NGXHttpLocConf | NGXConfTake1234,
 		NGXStreamMainConf | NGXStreamSrvConf | NGXConfTake1234},
+	"oauth2_redirect_separator":   []int{},
+	"oauth2_authorization_expire": []int{},
+	"oauth2_access_expire":        []int{},
+	"oauth2_allow_get_access":     []int{},
+	"oauth2_allowed_access_type":  []int{},
+	"oauth2_token_type":           []int{},
+	"oauth2_provider_name":        []int{},
+	"oauth2_auth_endpoint":        []int{},
+	"oauth2_token_endpoint":       []int{},
+	"oauth2_info_endpoint":        []int{},
+	"oauth2_session_path":         []int{},
+	"oauth2_session_max_age":      []int{},
+	"oauth2_session_domain":       []int{},
+	"oauth2_session_secure":       []int{},
+	"oauth2_session_hhhponly":     []int{},
+	"oauth2_session_name":         []int{},
+	"oauth2_csrf_secret":          []int{},
 	"output_buffers": []int{
 		NGXHttpMainConf | NGXHttpSrvConf | NGXHttpLocConf | NGXConfTake2},
 	"override_charset": []int{
@@ -1443,6 +1461,7 @@ var contexts = map[string]int{
 	toCtx("http", "server", "if"):             NGXHttpSifConf,
 	toCtx("http", "location", "if"):           NGXHttpLifConf,
 	toCtx("http", "location", "limit_except"): NGXHttpLmtConf,
+	toCtx("http", "oauth2"):                   NGXHttpOauth2Conf,
 }
 
 func toCtx(s ...string) string {

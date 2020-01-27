@@ -14,6 +14,7 @@ require (
 	github.com/onsi/ginkgo v1.11.0 // indirect
 	github.com/onsi/gomega v1.8.1 // indirect
 	github.com/open-policy-agent/opa v0.16.0
+	github.com/rakyll/statik v0.1.6
 	github.com/sourcegraph/jsonrpc2 v0.0.0-20191222043438-96c4efab7ee2
 	github.com/urfave/cli/v2 v2.1.1
 	golang.org/x/crypto v0.0.0-20191227163750-53104e6ec876
