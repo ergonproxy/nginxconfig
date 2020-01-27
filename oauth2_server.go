@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"crypto/rand"
-	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -24,7 +23,6 @@ type kvStore interface {
 	get(key []byte) ([]byte, error)
 	set(key, value []byte) error
 	remove(key []byte) error
-	serial() (uint64, error)
 }
 
 const (
@@ -86,7 +84,6 @@ var oauth2TokenPrefix = []byte("/token/")
 var oauth2CSRFTokenPrefix = []byte("/csrf/")
 
 type oauth2Token struct {
-	ID        uint64
 	Code      string
 	ClientID  oauth2ClientID
 	UserID    string
@@ -96,14 +93,13 @@ type oauth2Token struct {
 }
 
 type oauth2Grant struct {
-	ID             uint64
 	Code           string
 	Type           string
 	UserID         string
 	ClientID       oauth2ClientID
-	AccessToken    uint64
-	AuthorizeToken uint64
-	RefreshToken   uint64
+	AccessToken    string
+	AuthorizeToken string
+	RefreshToken   string
 	Scope          string
 	State          string
 	RedirectURL    string
@@ -117,8 +113,8 @@ type oauth2Client struct {
 	UserID      int64
 	Name        string
 	Secret      string
-	Grants      []uint64
-	Tokens      []uint64
+	Grants      []string
+	Tokens      []string
 	RedirectURL string
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
@@ -126,8 +122,8 @@ type oauth2Client struct {
 
 type oauth2User struct {
 	Email     string
-	Grants    []uint64
-	Tokens    []uint64
+	Grants    []string
+	Tokens    []string
 	Clients   []string
 	Password  string
 	CreatedAt time.Time
@@ -462,13 +458,13 @@ func (o *oauth2) authorize(w http.ResponseWriter, r *http.Request) error {
 			ctx.internalErr = err
 			return ctx.commit(w)
 		}
-		usr.Grants = append(usr.Grants, grant.ID)
+		usr.Grants = append(usr.Grants, grant.Code)
 		if err = o.saveUser(usr); err != nil {
 			ctx.setErrState(oauth2ErrServerError, "", state)
 			ctx.internalErr = err
 			return ctx.commit(w)
 		}
-		client.Grants = append(client.Grants, grant.ID)
+		client.Grants = append(client.Grants, grant.Code)
 		if err = o.saveClient(client); err != nil {
 			ctx.setErrState(oauth2ErrServerError, "", state)
 			ctx.internalErr = err
@@ -532,34 +528,22 @@ func (o *oauth2) saveClient(c *oauth2Client) error {
 
 func (o *oauth2) saveToken(c *oauth2Token) error {
 	var err error
-	if c.ID == 0 {
-		c.ID, err = o.store.serial()
-		if err != nil {
-			return err
-		}
-	}
 	c.UpdatedAt = time.Now()
 	b, err := json.Marshal(c)
 	if err != nil {
 		return err
 	}
-	return o.store.set(o.key(oauth2ClientPrefix, c.ID), b)
+	return o.store.set(joinSlice(oauth2ClientPrefix, []byte(c.Code)), b)
 }
 
 func (o *oauth2) saveGrant(c *oauth2Grant) error {
 	var err error
-	if c.ID == 0 {
-		c.ID, err = o.store.serial()
-		if err != nil {
-			return err
-		}
-	}
 	c.UpdatedAt = time.Now()
 	b, err := json.Marshal(c)
 	if err != nil {
 		return err
 	}
-	return o.store.set(o.key(oauth2ClientPrefix, c.ID), b)
+	return o.store.set(joinSlice(oauth2ClientPrefix, []byte(c.Code)), b)
 }
 
 func (o *oauth2) finalize(auth *oauth2Grant, ctx *oauth2Context, usr *oauth2User) error {
@@ -597,8 +581,8 @@ func (o *oauth2) finalize(auth *oauth2Grant, ctx *oauth2Context, usr *oauth2User
 		return err
 	}
 
-	access.AccessToken = genAccessToken.ID
-	access.RefreshToken = genRefreshToken.ID
+	access.AccessToken = genAccessToken.Code
+	access.RefreshToken = genRefreshToken.Code
 
 	if err := o.saveGrant(access); err != nil {
 		return err
@@ -610,14 +594,10 @@ func (o *oauth2) finalize(auth *oauth2Grant, ctx *oauth2Context, usr *oauth2User
 	if access.Scope != "" {
 		ctx.data[oauth2ParamScope] = access.Scope
 	}
-	if auth.ID != 0 {
-		return o.remove(oauth2GrantPrefix, auth.ID)
+	if auth.Code != "" {
+		return o.store.remove(joinSlice(oauth2GrantPrefix, []byte(auth.Code)))
 	}
 	return nil
-}
-
-func (o *oauth2) remove(prefix []byte, id uint64) error {
-	return o.store.remove(o.key(prefix, id))
 }
 
 func validateURIList(baseList, redir, sep string) error {
@@ -719,12 +699,6 @@ func (o *oauth2) user(email string) (*oauth2User, error) {
 		return nil, err
 	}
 	return nil, nil
-}
-
-func (o *oauth2) key(prefix []byte, id uint64) []byte {
-	var b [8]byte
-	binary.BigEndian.PutUint64(b[:], id)
-	return joinSlice(prefix, b[:])
 }
 
 func (o *oauth2) valid(username, password string) (*oauth2User, error) {
