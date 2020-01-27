@@ -1,0 +1,5 @@
+This project would have never been possible without th following projects.
+These are projects which I took inspiration from, in the form of implementation details
+or ideas.
+
+- https://github.com/square/ghostunnel : For tcp/udp proxying.
