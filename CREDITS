@@ -1,6 +1,7 @@
 This project would have never been possible without th following projects.
 These are projects which I took inspiration from, in the form of implementation details
-or ideas.
+or ideas or code(library) etc.
 
 - https://github.com/square/ghostunnel : For tcp/udp proxying.
 - https://github.com/nginxinc/crossplane all config parsing code is a port from this project
+- https://github.com/casbin/casbin : secure api's with acl,rbac,etc
