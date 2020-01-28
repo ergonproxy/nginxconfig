@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -126,7 +127,6 @@ func process(ctx context.Context, sctx *serverCtx, config *vinceConfiguration) e
 		} else {
 			l, err = net.Listen(opts.net, opts.addrPort)
 		}
-		l, err = net.Listen(opts.net, opts.addrPort)
 		if err != nil {
 			return err
 		}
@@ -143,6 +143,7 @@ func process(ctx context.Context, sctx *serverCtx, config *vinceConfiguration) e
 
 	// we can start servers now
 	for opts, srv := range sctx.ls3 {
+		fmt.Printf("[vince] starting server on %q\n", sctx.ls2[opts].Addr().String())
 		go srv.Serve(sctx.ls2[opts])
 	}
 	return nil
@@ -180,6 +181,7 @@ func startEverything(mainCtx context.Context, config *vinceConfiguration) error 
 		ch,
 		syscall.SIGTERM,
 		syscall.SIGINT,
+		syscall.SIGABRT,
 		syscall.SIGHUP,
 		syscall.SIGQUIT,
 		syscall.SIGUSR1,
@@ -188,8 +190,10 @@ func startEverything(mainCtx context.Context, config *vinceConfiguration) error 
 	)
 	for {
 		sig := <-ch
+		fmt.Println("vince: received signal " + sig.String())
 		switch sig {
-		case syscall.SIGTERM, syscall.SIGINT:
+		case syscall.SIGTERM, syscall.SIGINT, syscall.SIGABRT:
+			return errors.New("exiting")
 		case syscall.SIGQUIT:
 			fmt.Println("Shutting down")
 			return sctx.shutdown(ctx)
@@ -355,13 +359,16 @@ func (ls *locationMatch) match(path string) *rule {
 			}
 		}
 	}
-	for i := 0; i < len(up.rules); i++ {
-		if ls.rules[i].kind == matchRegexp {
-			if ls.rules[i].re.MatchString(path) {
-				return ls.rules[i].rule
+	if up != nil {
+		for i := 0; i < len(up.rules); i++ {
+			if ls.rules[i].kind == matchRegexp {
+				if ls.rules[i].re.MatchString(path) {
+					return ls.rules[i].rule
+				}
 			}
 		}
 	}
+
 	if selected != nil {
 		return selected.rule
 	}

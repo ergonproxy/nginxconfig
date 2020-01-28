@@ -4,6 +4,7 @@ go 1.12
 
 require (
 	code.cloudfoundry.org/bytefmt v0.0.0-20200121221524-a7ec01c286f4
+	github.com/casbin/casbin/v2 v2.1.2
 	github.com/dgraph-io/badger/v2 v2.0.1
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/hashicorp/raft v1.1.2

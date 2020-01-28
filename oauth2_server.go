@@ -19,10 +19,83 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+var _ kvStore = (*kvStoreDB)(nil)
+
 type kvStore interface {
 	get(key []byte) ([]byte, error)
 	set(key, value []byte) error
 	remove(key []byte) error
+	onSet(func([]byte))
+	onRemove(func([]byte))
+	clone() kvStore // without callbacks
+}
+
+type kvStoreDB struct {
+	db              *badger.DB
+	setCallbacks    []func([]byte)
+	removeCallbacks []func([]byte)
+}
+
+func (kv *kvStoreDB) clone() kvStore {
+	return &kvStoreDB{db: kv.db}
+}
+
+func (kv *kvStoreDB) set(key, value []byte) error {
+	err := kv.db.Update(func(txn *badger.Txn) error {
+		return txn.Set(key, value)
+	})
+	if err != nil {
+		return err
+	}
+	if len(kv.setCallbacks) > 0 {
+		go kv.setCb(key)
+	}
+	return nil
+}
+
+func (kv *kvStoreDB) remove(key []byte) error {
+	err := kv.db.Update(func(txn *badger.Txn) error {
+		return txn.Delete(key)
+	})
+	if err != nil {
+		return err
+	}
+	if len(kv.setCallbacks) > 0 {
+		go kv.removeCb(key)
+	}
+	return nil
+}
+
+func (kv *kvStoreDB) get(key []byte) (value []byte, err error) {
+	err = kv.db.View(func(txn *badger.Txn) error {
+		i, err := txn.Get(key)
+		if err != nil {
+			return err
+		}
+		value, err = i.ValueCopy(nil)
+		return err
+	})
+	return
+}
+
+func (kv *kvStoreDB) onSet(fn func([]byte)) {
+	kv.setCallbacks = append(kv.setCallbacks, fn)
+}
+
+func (kv *kvStoreDB) onRemove(fn func([]byte)) {
+	kv.removeCallbacks = append(kv.removeCallbacks, fn)
+}
+
+func (kv *kvStoreDB) setCb(key []byte) {
+	for _, v := range kv.setCallbacks {
+		v(key)
+	}
+}
+
+func (kv *kvStoreDB) removeCb(key []byte) {
+	for _, v := range kv.removeCallbacks {
+		v(key)
+	}
 }
 
 const (

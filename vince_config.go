@@ -120,6 +120,7 @@ func getConfig(ctx *cli.Context) (*vinceConfiguration, error) {
 			c.confFile = file
 			c.dir = filepath.Dir(file)
 		}
+		return &c, nil
 	}
 	for _, file := range defaultConfigFiles() {
 		_, err := os.Stat(file)
