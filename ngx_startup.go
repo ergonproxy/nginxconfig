@@ -87,10 +87,10 @@ func ruleFromStmt(stmt *Stmt, parent *rule) *rule {
 	return r
 }
 
-func process(ctx context.Context, sctx *serverCtx, config *vinceConfiguration) error {
+func process(ctx context.Context, srvCtx *serverCtx, config *vinceConfiguration) error {
 	var servers []*rule
 	// main block
-	for _, base := range sctx.core.children {
+	for _, base := range srvCtx.core.children {
 		if base.name == "http" {
 			// http block
 			for _, child := range base.children {
@@ -104,18 +104,18 @@ func process(ctx context.Context, sctx *serverCtx, config *vinceConfiguration) e
 
 	for _, v := range servers {
 		for _, ls := range findListener(v, config.defaultPort) {
-			if _, ok := sctx.address[ls.addrPort]; !ok {
-				sctx.address[ls.addrPort] = &ls
+			if _, ok := srvCtx.address[ls.addrPort]; !ok {
+				srvCtx.address[ls.addrPort] = &ls
 			}
-			if a, ok := sctx.ls1[ls.addrPort]; ok {
-				sctx.ls1[ls.addrPort] = append(a, v)
+			if a, ok := srvCtx.ls1[ls.addrPort]; ok {
+				srvCtx.ls1[ls.addrPort] = append(a, v)
 			} else {
-				sctx.ls1[ls.addrPort] = []*rule{v}
+				srvCtx.ls1[ls.addrPort] = []*rule{v}
 			}
 		}
 	}
-	for k := range sctx.ls1 {
-		opts := sctx.address[k]
+	for k := range srvCtx.ls1 {
+		opts := srvCtx.address[k]
 		var l net.Listener
 		var err error
 		if opts.ssl {
@@ -130,26 +130,26 @@ func process(ctx context.Context, sctx *serverCtx, config *vinceConfiguration) e
 		if err != nil {
 			return err
 		}
-		sctx.ls2[opts.addrPort] = l
+		srvCtx.ls2[opts.addrPort] = l
 	}
-	for k, rules := range sctx.ls1 {
-		opts := sctx.address[k]
-		srv, err := createHTTPServer(context.WithValue(ctx, serverCtxKey{}, sctx.with(opts)), rules, opts)
+	for k, rules := range srvCtx.ls1 {
+		opts := srvCtx.address[k]
+		srv, err := createHTTPServer(context.WithValue(ctx, serverCtxKey{}, srvCtx.with(opts)), rules, opts)
 		if err != nil {
 			return err
 		}
-		sctx.ls3[opts.addrPort] = srv
+		srvCtx.ls3[opts.addrPort] = srv
 	}
 
 	// we can start servers now
-	for opts, srv := range sctx.ls3 {
-		fmt.Printf("[vince] starting server on %q\n", sctx.ls2[opts].Addr().String())
-		go srv.Serve(sctx.ls2[opts])
+	for opts, srv := range srvCtx.ls3 {
+		fmt.Printf("[vince] starting server on %q\n", srvCtx.ls2[opts].Addr().String())
+		go srv.Serve(srvCtx.ls2[opts])
 	}
 	return nil
 }
 
-func startEverything(mainCtx context.Context, config *vinceConfiguration) error {
+func startEverything(mainCtx context.Context, config *vinceConfiguration, ready ...func()) error {
 	ctx, cancel := context.WithCancel(mainCtx)
 	defer cancel()
 	fs, err := templates.NewIncludeFS()
@@ -163,18 +163,21 @@ func startEverything(mainCtx context.Context, config *vinceConfiguration) error 
 	d := &Stmt{Directive: "main"}
 	d.Blocks = p.Config[0].Parsed
 	core := ruleFromStmt(d, nil)
-	sctx := newSrvCtx()
-	sctx.core = core
+	srvCtx := newSrvCtx()
+	srvCtx.core = core
 
 	defer func() {
 		// make sure all listeners are closed before exiting
-		for _, l := range sctx.ls2 {
+		for _, l := range srvCtx.ls2 {
 			l.Close() // TODO:(gernest) handle error
 		}
 	}()
 
-	if err := process(ctx, sctx, config); err != nil {
+	if err := process(ctx, srvCtx, config); err != nil {
 		return err
+	}
+	if len(ready) > 0 {
+		ready[0]()
 	}
 	ch := make(chan os.Signal, 2)
 	signal.Notify(
@@ -189,18 +192,22 @@ func startEverything(mainCtx context.Context, config *vinceConfiguration) error 
 		syscall.SIGWINCH,
 	)
 	for {
-		sig := <-ch
-		fmt.Println("vince: received signal " + sig.String())
-		switch sig {
-		case syscall.SIGTERM, syscall.SIGINT, syscall.SIGABRT:
-			return errors.New("exiting")
-		case syscall.SIGQUIT:
-			fmt.Println("Shutting down")
-			return sctx.shutdown(ctx)
-		case syscall.SIGHUP:
-		case syscall.SIGUSR1:
-		case syscall.SIGUSR2:
-		case syscall.SIGWINCH:
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case sig := <-ch:
+			fmt.Println("vince: received signal " + sig.String())
+			switch sig {
+			case syscall.SIGTERM, syscall.SIGINT, syscall.SIGABRT:
+				return errors.New("exiting")
+			case syscall.SIGQUIT:
+				fmt.Println("Shutting down")
+				return srvCtx.shutdown(ctx)
+			case syscall.SIGHUP:
+			case syscall.SIGUSR1:
+			case syscall.SIGUSR2:
+			case syscall.SIGWINCH:
+			}
 		}
 	}
 }
@@ -268,7 +275,7 @@ func createHTTPServer(ctx context.Context, servers []*rule, opts *listenOpts) (*
 	}
 	s.ConnState = opts.manager.manageConnState
 	s.ConnContext = opts.manager.connContext
-	s.Handler = ngnxHandler(ctx, servers)
+	s.Handler = vinceHandler(ctx, servers)
 	return s, nil
 }
 
@@ -411,8 +418,8 @@ func (ls *locationMatch) load(srv *rule) {
 	}
 }
 
-func ngnxHandler(ctx context.Context, servers []*rule) http.Handler {
-	sctx := ctx.Value(serverCtxKey{}).(*serverCtx)
+func vinceHandler(ctx context.Context, servers []*rule) http.Handler {
+	srvCtx := ctx.Value(serverCtxKey{}).(*serverCtx)
 	reg := make(map[*regexp.Regexp]*rule)
 	exact := make(map[string][]*rule)
 	wild := make(map[string]*rule)
@@ -461,7 +468,7 @@ func ngnxHandler(ctx context.Context, servers []*rule) http.Handler {
 				return r
 			}
 		}
-		return sctx.defaultServer[sctx.active.addrPort]
+		return srvCtx.defaultServer[srvCtx.active.addrPort]
 	}
 	location := new(sync.Map)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -488,9 +495,9 @@ func ngnxHandler(ctx context.Context, servers []*rule) http.Handler {
 		if l := loc.match(r.URL.Path); l != nil {
 			c := l.collect(nil)
 			// we start by executing child block
-			block := sctx.chain(l.children...)
+			block := srvCtx.chain(l.children...)
 			// then we traverse the parents
-			parent := sctx.chain(overide(c)...)
+			parent := srvCtx.chain(overide(c)...)
 			block.then(parent.then(noopHandler{})).ServeHTTP(w, r)
 		}
 		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
