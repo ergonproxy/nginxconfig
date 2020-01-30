@@ -147,7 +147,7 @@ func streamConn(ctx context.Context, conn net.Conn, srv stream, m *connManager) 
 			opts.stats.status(statusConnRemoteOpen)
 		}
 	}()
-	return proxyConn(ctx, opts, conn, remote)
+	return proxyConn(ctx, opts, conn, remote, m)
 }
 
 func show(ctx context.Context, err error) {
