@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"net"
+	"net/http"
 	"sync"
 	"time"
 )
@@ -40,7 +41,7 @@ type connStats interface {
 	done()
 }
 
-func proxyConn(ctx context.Context, opts proxyConnOpts, local, remote net.Conn) error {
+func proxyConn(ctx context.Context, opts proxyConnOpts, local, remote net.Conn, m *connManager) error {
 	buf := bytesPool.Get().([]byte)
 	now := time.Now()
 	defer func() {
@@ -52,6 +53,7 @@ func proxyConn(ctx context.Context, opts proxyConnOpts, local, remote net.Conn) 
 	}()
 	var n int
 	var err error
+	firstRemote, firstLocal := true, true
 	for {
 		if ctx.Err() != nil {
 			show(ctx, err)
@@ -62,6 +64,10 @@ func proxyConn(ctx context.Context, opts proxyConnOpts, local, remote net.Conn) 
 		if err != nil {
 			return err
 		}
+		if firstRemote {
+			m.manageConnState(remote, http.StateActive)
+			firstRemote = !firstRemote
+		}
 		if opts.stats != nil {
 			opts.stats.remoteBytesRead(n)
 		}
@@ -69,6 +75,10 @@ func proxyConn(ctx context.Context, opts proxyConnOpts, local, remote net.Conn) 
 		if err != nil {
 			show(ctx, err)
 			return err
+		}
+		if firstLocal {
+			m.manageConnState(local, http.StateActive)
+			firstLocal = !firstLocal
 		}
 		if opts.stats != nil {
 			opts.stats.localBytesRead(n)
@@ -93,22 +103,27 @@ func configConn(conn net.Conn, opts connConfig) error {
 type stream interface {
 	upstream() (net.Conn, error)
 	config() proxyConnOpts
+	baseCtx() context.Context
 }
 
-func streamListener(ctx context.Context, ls net.Listener, srv stream) error {
+func streamListener(ctx context.Context, ls net.Listener, srv stream, m *connManager) error {
 	for {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
+		baseCtx := m.baseCtx(ctx, ls)
+
 		l, err := ls.Accept()
 		if err != nil {
 			return err
 		}
-		go streamConn(ctx, l, srv)
+		ctx = m.connContext(baseCtx, l)
+		m.manageConnState(l, http.StateNew)
+		go streamConn(ctx, l, srv, m)
 	}
 }
 
-func streamConn(ctx context.Context, conn net.Conn, srv stream) error {
+func streamConn(ctx context.Context, conn net.Conn, srv stream, m *connManager) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -116,13 +131,16 @@ func streamConn(ctx context.Context, conn net.Conn, srv stream) error {
 	if err != nil {
 		return err
 	}
+	m.manageConnState(remote, http.StateNew)
 	opts := srv.config()
 	if opts.stats != nil {
 		opts.stats.status(statusConnLocalOpen)
 		opts.stats.status(statusConnRemoteOpen)
 	}
 	defer func() {
+		m.manageConnState(conn, http.StateClosed)
 		show(ctx, conn.Close())
+		m.manageConnState(remote, http.StateClosed)
 		show(ctx, remote.Close())
 		if opts.stats != nil {
 			opts.stats.status(statusConnLocalOpen)
@@ -136,4 +154,8 @@ func show(ctx context.Context, err error) {
 	if err != nil {
 		// TODO log this error
 	}
+}
+
+type streamServer struct {
+	stream stream
 }

@@ -35,7 +35,7 @@ type listenOpts struct {
 
 	//ssl related options
 	sslOpts sslOptions
-	manager *httpConnManager
+	manager *connManager
 }
 
 var _ tls.ClientSessionCache = tlsClientCache{}
