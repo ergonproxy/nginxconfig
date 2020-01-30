@@ -59,7 +59,7 @@ type payload struct {
 }
 
 func parseInternal(fs http.FileSystem, parsing *parsingContext, tokens *tokenIter, ctx []string, consume bool) []*Stmt {
-	var parsed []*Stmt
+	parsed := []*Stmt{}
 	for token := tokens.next(); token != nil; token = tokens.next() {
 		var commentsInArgs []string
 		if token.text == "}" && !token.quote {

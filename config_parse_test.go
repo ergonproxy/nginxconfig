@@ -18,7 +18,9 @@ func TestParseIncludeReqular(t *testing.T) {
 	}
 	p := parse(filename, fs, defaultParseOpts())
 	b, _ := json.Marshal(p)
-	expect, err := ioutil.ReadFile(filepath.Join(filepath.Dir(filename), "expect.json"))
+	file := filepath.Join(filepath.Dir(filename), "includes_regular")
+	// ioutil.WriteFile(file, b, 0600)
+	expect, err := ioutil.ReadFile(file)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,14 +31,15 @@ func TestParseIncludeReqular(t *testing.T) {
 
 func TestParseIncludesGlobbed(t *testing.T) {
 	filename := "fixture/crossplane/includes-globbed/nginx.conf"
-	expectFile := filepath.Join(filepath.Dir(filename), "expect_globbed.json")
 	fs, err := templates.NewIncludeFS()
 	if err != nil {
 		t.Fatal(err)
 	}
 	p := parse(filename, fs, defaultParseOpts())
 	b, _ := json.Marshal(p)
-	expect, err := ioutil.ReadFile(expectFile)
+	file := filepath.Join(filepath.Dir(filename), "includes_globbed")
+	// ioutil.WriteFile(file, b, 0600)
+	expect, err := ioutil.ReadFile(file)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,0 +1,6 @@
+root /test;
+client_body_temp_path /test/client_body_temp;
+fastcgi_temp_path /test/fastcgi_temp;
+proxy_temp_path /test/proxy_temp;
+uwsgi_temp_path /test/uwsgi_temp;
+scgi_temp_path /test/scgi_temp;

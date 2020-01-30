@@ -195,12 +195,14 @@ func buildBlock(output string, custom map[string]customBuilder, block []*Stmt, p
 			} else {
 				built = directive
 			}
-			if len(stmt.Blocks) > 0 {
+			if stmt.Blocks != nil {
 				built += " {"
 				built = buildBlock(built, custom, stmt.Blocks, padding, depth+1, stmt.Line)
 				built += "\n" + m + "}"
+
 			} else {
 				built += ";"
+
 			}
 		}
 		if len(output) > 0 {
