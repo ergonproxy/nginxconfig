@@ -103,7 +103,6 @@ func configConn(conn net.Conn, opts connConfig) error {
 type stream interface {
 	upstream() (net.Conn, error)
 	config() proxyConnOpts
-	baseCtx() context.Context
 }
 
 func streamListener(ctx context.Context, ls net.Listener, srv stream, m *connManager) error {
@@ -158,4 +157,23 @@ func show(ctx context.Context, err error) {
 
 type streamServer struct {
 	stream stream
+	m      *connManager
+	ctx    context.Context
+	cancel func()
+}
+
+func (s *streamServer) init(ctx context.Context, sm stream, m *connManager) {
+	s.ctx, s.cancel = context.WithCancel(ctx)
+	s.m = m
+	s.stream = sm
+}
+
+func (s *streamServer) Serve(ls net.Listener) error {
+	return streamListener(s.ctx, ls, s.stream, s.m)
+}
+
+func (s *streamServer) Close() error {
+	s.cancel()
+	<-s.ctx.Done() // make sure we didn't mess up context
+	return nil
 }
