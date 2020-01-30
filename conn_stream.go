@@ -28,15 +28,6 @@ type proxyConnOpts struct {
 	scope         tally.Scope
 }
 
-type connStats interface {
-	localBytesRead(int)
-	localBytesWritten(int)
-	remoteBytesRead(int)
-	remoteBytesWritten(int)
-	duration(time.Duration)
-	done()
-}
-
 type tcpAnalytics struct {
 	local struct {
 		bytesRead    tally.Histogram
@@ -78,16 +69,19 @@ func proxyConn(ctx context.Context, opts proxyConnOpts, local, remote net.Conn, 
 	firstRemote.Store(true)
 	firstLocal.Store(true)
 	go func() {
+		buf := bytesPool.Get().([]byte)
+		defer func() {
+			bytesPool.Put(buf[:0])
+		}()
+		buf = buf[:0]
 		for {
 			if ctx.Err() != nil {
 				show(ctx, err)
 			}
-			buf := bytesPool.Get().([]byte)
-			defer func() {
-				bytesPool.Put(buf[:0])
-			}()
-			buf = buf[:0]
 			// read local and write remote
+			if opts.local.readTimeout != 0 {
+				local.SetReadDeadline(time.Now().Add(opts.local.readTimeout))
+			}
 			n, err = local.Read(buf)
 			if err != nil {
 				return
@@ -98,6 +92,9 @@ func proxyConn(ctx context.Context, opts proxyConnOpts, local, remote net.Conn, 
 			}
 			ts.local.bytesRead.RecordValue(float64(n))
 
+			if opts.remote.writeTimeout != 0 {
+				remote.SetWriteDeadline(time.Now().Add(opts.remote.writeTimeout))
+			}
 			n, err = remote.Write(buf[:n])
 			if err != nil {
 				return
@@ -120,6 +117,9 @@ func proxyConn(ctx context.Context, opts proxyConnOpts, local, remote net.Conn, 
 		}
 		buf = buf[:0]
 		//read remote and write local
+		if opts.remote.readTimeout != 0 {
+			remote.SetReadDeadline(time.Now().Add(opts.remote.readTimeout))
+		}
 		n, err = remote.Read(buf)
 		if err != nil {
 			show(ctx, err)
@@ -131,6 +131,9 @@ func proxyConn(ctx context.Context, opts proxyConnOpts, local, remote net.Conn, 
 		}
 		ts.local.bytesWritten.RecordValue(float64(n))
 
+		if opts.local.writeTimeout != 0 {
+			local.SetWriteDeadline(time.Now().Add(opts.local.writeTimeout))
+		}
 		n, err = local.Write(buf[:n])
 		if err != nil {
 			show(ctx, err)
