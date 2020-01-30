@@ -187,3 +187,10 @@ func (m *connManager) baseCtx(ctx context.Context, ls net.Listener) context.Cont
 	baseCtx = context.WithValue(baseCtx, connManagerKey{}, m)
 	return baseCtx
 }
+
+func (m *connManager) getID(conn net.Conn) int64 {
+	if v, ok := m.conns.Load(conn); ok {
+		return v.(*connInfo).id
+	}
+	return 0
+}

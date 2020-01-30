@@ -4,8 +4,12 @@ import (
 	"context"
 	"net"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
+
+	"github.com/uber-go/tally"
+	"go.uber.org/atomic"
 )
 
 var bytesPool = &sync.Pool{
@@ -21,68 +25,122 @@ type connConfig struct {
 
 type proxyConnOpts struct {
 	local, remote connConfig
-	stats         connStats
+	scope         tally.Scope
 }
-
-type connStatus uint
-
-const (
-	statusConnLocalOpen = 1 + iota
-	statusConnRemoteOpen
-	statusConnLocalClosed
-	statusConnRemoteClosed
-)
 
 type connStats interface {
 	localBytesRead(int)
+	localBytesWritten(int)
 	remoteBytesRead(int)
+	remoteBytesWritten(int)
 	duration(time.Duration)
-	status(connStatus)
 	done()
 }
 
+type tcpAnalytics struct {
+	local struct {
+		bytesRead    tally.Histogram
+		bytesWritten tally.Histogram
+	}
+	upstream struct {
+		bytesWritten tally.Histogram
+		bytesRead    tally.Histogram
+	}
+	duration tally.Histogram
+}
+
+func (t *tcpAnalytics) init(scope tally.Scope, local, remote net.Conn, m *connManager) {
+	s := scope.Tagged(map[string]string{
+		"local":    strconv.FormatInt(m.getID(local), 10),
+		"upstream": strconv.FormatInt(m.getID(remote), 10),
+	})
+	t.local.bytesRead = s.Histogram("stream_local_bytes_read", histogramBucket())
+	t.local.bytesWritten = s.Histogram("stream_local_bytes_written", histogramBucket())
+	t.upstream.bytesRead = s.Histogram("stream_upstream_bytes_read", histogramBucket())
+	t.upstream.bytesWritten = s.Histogram("stream_upstream_bytes_written", histogramBucket())
+	t.duration = s.Histogram("stream_total_duration", tally.MustMakeLinearDurationBuckets(0, time.Millisecond, 60))
+}
+
+func histogramBucket() tally.Buckets {
+	return tally.DefaultBuckets
+}
+
 func proxyConn(ctx context.Context, opts proxyConnOpts, local, remote net.Conn, m *connManager) error {
-	buf := bytesPool.Get().([]byte)
-	now := time.Now()
+	var ts tcpAnalytics
+	ts.init(opts.scope, local, remote, m)
+	watch := ts.duration.Start()
 	defer func() {
-		bytesPool.Put(buf[:0])
-		if opts.stats != nil {
-			opts.stats.duration(time.Since(now))
-			opts.stats.done()
-		}
+		watch.Stop()
 	}()
 	var n int
 	var err error
-	firstRemote, firstLocal := true, true
+	var firstRemote, firstLocal atomic.Bool
+	firstRemote.Store(true)
+	firstLocal.Store(true)
+	go func() {
+		for {
+			if ctx.Err() != nil {
+				show(ctx, err)
+			}
+			buf := bytesPool.Get().([]byte)
+			defer func() {
+				bytesPool.Put(buf[:0])
+			}()
+			buf = buf[:0]
+			// read local and write remote
+			n, err = local.Read(buf)
+			if err != nil {
+				return
+			}
+			if firstLocal.Load() {
+				m.manageConnState(local, http.StateActive)
+				firstLocal.Store(false)
+			}
+			ts.local.bytesRead.RecordValue(float64(n))
+
+			n, err = remote.Write(buf[:n])
+			if err != nil {
+				return
+			}
+			if firstRemote.Load() {
+				m.manageConnState(remote, http.StateActive)
+				firstRemote.Store(false)
+			}
+			ts.upstream.bytesWritten.RecordValue(float64(n))
+		}
+	}()
+	buf := bytesPool.Get().([]byte)
+	defer func() {
+		bytesPool.Put(buf[:0])
+	}()
 	for {
 		if ctx.Err() != nil {
 			show(ctx, err)
 			return err
 		}
 		buf = buf[:0]
+		//read remote and write local
 		n, err = remote.Read(buf)
 		if err != nil {
+			show(ctx, err)
 			return err
 		}
-		if firstRemote {
+		if firstRemote.Load() {
 			m.manageConnState(remote, http.StateActive)
-			firstRemote = !firstRemote
+			firstRemote.Store(false)
 		}
-		if opts.stats != nil {
-			opts.stats.remoteBytesRead(n)
-		}
+		ts.local.bytesWritten.RecordValue(float64(n))
+
 		n, err = local.Write(buf[:n])
 		if err != nil {
 			show(ctx, err)
 			return err
 		}
-		if firstLocal {
+		if firstLocal.Load() {
 			m.manageConnState(local, http.StateActive)
-			firstLocal = !firstLocal
+			firstLocal.Store(false)
 		}
-		if opts.stats != nil {
-			opts.stats.localBytesRead(n)
-		}
+		ts.local.bytesWritten.RecordValue(float64(n))
 	}
 }
 
@@ -132,19 +190,9 @@ func streamConn(ctx context.Context, conn net.Conn, srv stream, m *connManager) 
 	}
 	m.manageConnState(remote, http.StateNew)
 	opts := srv.config()
-	if opts.stats != nil {
-		opts.stats.status(statusConnLocalOpen)
-		opts.stats.status(statusConnRemoteOpen)
-	}
 	defer func() {
 		m.manageConnState(conn, http.StateClosed)
-		show(ctx, conn.Close())
 		m.manageConnState(remote, http.StateClosed)
-		show(ctx, remote.Close())
-		if opts.stats != nil {
-			opts.stats.status(statusConnLocalOpen)
-			opts.stats.status(statusConnRemoteOpen)
-		}
 	}()
 	return proxyConn(ctx, opts, conn, remote, m)
 }
