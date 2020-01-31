@@ -228,8 +228,23 @@ func (s *serverCtx) with(active listenOpts) *serverCtx {
 
 func (s *serverCtx) handle(r *rule) func(http.Handler) http.Handler {
 	switch r.name {
+	case "proxy_pass":
+		p := new(proxy)
+		return wrap(p, true)
 	default:
 		return nextHandler
+	}
+}
+
+func wrap(h http.Handler, halt bool) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			h.ServeHTTP(w, r)
+			if halt {
+				return // we are done evaluating the chain
+			}
+			next.ServeHTTP(w, r)
+		})
 	}
 }
 
@@ -504,9 +519,13 @@ func vinceHandler(ctx context.Context, servers []*rule) http.Handler {
 	})
 }
 
-type alice []func(http.Handler) http.Handler
+type handler interface {
+	ServeHTTP(http.ResponseWriter, *http.Request)
+}
 
-func (a alice) then(h http.Handler) http.Handler {
+type alice []func(handler) handler
+
+func (a alice) then(h handler) handler {
 	if h == nil {
 		h = noopHandler{}
 	}

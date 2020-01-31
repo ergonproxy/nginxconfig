@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 )
@@ -301,6 +302,13 @@ func resolveVariables(m *sync.Map, src []byte) []byte {
 		}
 		return []byte{}
 	})
+}
+
+func eval(m *sync.Map, key string) string {
+	if !strings.Contains(key, "$") {
+		return key
+	}
+	return string(resolveVariables(m, []byte(key)))
 }
 
 func toByte(v interface{}) []byte {
