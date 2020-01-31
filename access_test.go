@@ -3,7 +3,6 @@ package main
 import "testing"
 
 func TestAccess(t *testing.T) {
-	t.Skip()
 	file := `daemon off;
 events {
 }

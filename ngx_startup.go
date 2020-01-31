@@ -105,7 +105,7 @@ func process(ctx context.Context, srvCtx *serverCtx, config *vinceConfiguration)
 	for _, v := range servers {
 		for _, ls := range findListener(v, config.defaultPort) {
 			if _, ok := srvCtx.address[ls.addrPort]; !ok {
-				srvCtx.address[ls.addrPort] = &ls
+				srvCtx.address[ls.addrPort] = ls
 			}
 			if a, ok := srvCtx.ls1[ls.addrPort]; ok {
 				srvCtx.ls1[ls.addrPort] = append(a, v)
@@ -215,15 +215,15 @@ func startEverything(mainCtx context.Context, config *vinceConfiguration, ready 
 type serverCtx struct {
 	core          *rule
 	defaultServer map[string]*rule
-	address       map[string]*listenOpts
+	address       map[string]listenOpts
 	ls1           map[string][]*rule
 	ls2           map[string]net.Listener
 	ls3           map[string]*http.Server
 	active        *listenOpts
 }
 
-func (s *serverCtx) with(active *listenOpts) *serverCtx {
-	return &serverCtx{core: s.core, ls1: s.ls1, ls2: s.ls2, ls3: s.ls3, active: active}
+func (s *serverCtx) with(active listenOpts) *serverCtx {
+	return &serverCtx{core: s.core, ls1: s.ls1, ls2: s.ls2, ls3: s.ls3, active: &active}
 }
 
 func (s *serverCtx) handle(r *rule) func(http.Handler) http.Handler {
@@ -260,14 +260,14 @@ func nextHandler(next http.Handler) http.Handler {
 
 func newSrvCtx() *serverCtx {
 	return &serverCtx{
-		address: make(map[string]*listenOpts),
+		address: make(map[string]listenOpts),
 		ls1:     make(map[string][]*rule),
 		ls2:     make(map[string]net.Listener),
 		ls3:     make(map[string]*http.Server),
 	}
 }
 
-func createHTTPServer(ctx context.Context, servers []*rule, opts *listenOpts) (*http.Server, error) {
+func createHTTPServer(ctx context.Context, servers []*rule, opts listenOpts) (*http.Server, error) {
 	s := &http.Server{}
 	opts.manager = newHTTPConnManager(nextID)
 	s.BaseContext = func(ls net.Listener) context.Context {

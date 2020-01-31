@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"html/template"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -12,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"text/template"
 )
 
 // make sure that vince started with configuration and calls kase after vince is
@@ -28,7 +28,7 @@ func runTest(t *testing.T, v *vinceConfiguration, kase ...func(context.Context, 
 			ready <- true
 		})
 		if err != nil {
-			t.Error(err)
+			t.Log(err)
 			ready <- false
 		}
 	}()
