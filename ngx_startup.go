@@ -161,11 +161,7 @@ func startEverything(mainCtx context.Context, config *vinceConfiguration, ready 
 	d.Blocks = p.Config[0].Parsed
 	core := ruleFromStmt(d, nil)
 	srvCtx := newSrvCtx()
-	tpl, err := templates.HTML()
-	if err != nil {
-		return err
-	}
-	srvCtx.tpl = tpl
+	srvCtx.tpl = templates.HTML()
 	srvCtx.core = core
 
 	defer func() {

@@ -235,10 +235,6 @@ type oauth2 struct {
 }
 
 func (o *oauth2) init(store kvStore, opts oauth2Option) error {
-	tpl, err := templates.HTML()
-	if err != nil {
-		return err
-	}
 	csrf, err := store.get(oauth2CSRFTokenPrefix)
 	if err != nil {
 		if err != badger.ErrKeyNotFound {
@@ -266,7 +262,7 @@ func (o *oauth2) init(store kvStore, opts oauth2Option) error {
 			opts.CsrfSecret = csrf
 		}
 	}
-	o.templates = tpl
+	o.templates = templates.HTML()
 	o.opts = opts
 	return nil
 }

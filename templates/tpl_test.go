@@ -1,16 +1,14 @@
 package templates
 
-import "testing"
-
-import "bytes"
+import (
+	"bytes"
+	"testing"
+)
 
 func TestHTML(t *testing.T) {
-	tpl, err := HTML()
-	if err != nil {
-		t.Fatal(err)
-	}
+	tpl := HTML()
 	var buf bytes.Buffer
-	err = tpl.ExecuteTemplate(&buf, "oauth2_login.html", nil)
+	err := tpl.ExecuteTemplate(&buf, "oauth/login.html", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

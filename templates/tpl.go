@@ -10,7 +10,17 @@ import (
 	"github.com/rakyll/statik/fs"
 )
 
-func HTML() (*template.Template, error) {
+var htmlTpl *template.Template
+var htmlOnce sync.Once
+
+func HTML() *template.Template {
+	htmlOnce.Do(func() {
+		htmlTpl = template.Must(loadHTML())
+	})
+	return htmlTpl
+}
+
+func loadHTML() (*template.Template, error) {
 	files, err := fs.New()
 	if err != nil {
 		return nil, err
