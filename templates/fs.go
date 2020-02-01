@@ -48,6 +48,9 @@ func (f PrefixFallbackFS) Open(name string) (file http.File, err error) {
 // IncludeFS fs for embedded include configurations
 const IncludeFS PrefixFallbackFS = "/confs/includes"
 
+// WebFS serves web assets
+const WebFS PrefixFS = "/web"
+
 func must(v http.FileSystem, err error) http.FileSystem {
 	if err != nil {
 		panic(err)

@@ -17,11 +17,21 @@ func (m *management) init(ctx *serverCtx) {
 	m.ctx = ctx
 	h := echo.New()
 	h.GET("/", m.index)
+	h.GET("/assets/*", m.static())
 	m.h = h
 }
 
 func (m management) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	m.h.ServeHTTP(w, r)
+}
+
+func (m management) static() echo.HandlerFunc {
+	static := http.FileServer(templates.WebFS)
+	sh := http.StripPrefix("/assets", static)
+	return func(ctx echo.Context) error {
+		sh.ServeHTTP(ctx.Response(), ctx.Request())
+		return nil
+	}
 }
 
 func (m *management) index(ctx echo.Context) error {
