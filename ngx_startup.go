@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"html/template"
 	"net"
 	"net/http"
 	"os"
@@ -164,6 +165,11 @@ func startEverything(mainCtx context.Context, config *vinceConfiguration, ready 
 	d.Blocks = p.Config[0].Parsed
 	core := ruleFromStmt(d, nil)
 	srvCtx := newSrvCtx()
+	tpl, err := templates.HTML()
+	if err != nil {
+		return err
+	}
+	srvCtx.tpl = tpl
 	srvCtx.core = core
 
 	defer func() {
@@ -175,6 +181,25 @@ func startEverything(mainCtx context.Context, config *vinceConfiguration, ready 
 
 	if err := process(ctx, srvCtx, config); err != nil {
 		return err
+	}
+	if config.management.enabled {
+		l, err := net.Listen("tcp", fmt.Sprintf(":%d", config.management.port))
+		if err != nil {
+			// TODO log
+			fmt.Println("vince: failed to start management server ", err)
+		} else {
+			srvCtx.address[l.Addr().String()] = listenOpts{
+				net:      l.Addr().Network(),
+				addrPort: l.Addr().String(),
+			}
+			srvCtx.ls2[l.Addr().String()] = l
+			m := new(management)
+			m.init(srvCtx)
+			srv := &http.Server{Handler: m}
+			srvCtx.ls3[l.Addr().String()] = srv
+			fmt.Println("vince: staring management server at ", l.Addr().String())
+			go srv.Serve(l)
+		}
 	}
 	if len(ready) > 0 {
 		ready[0]()
@@ -214,6 +239,7 @@ func startEverything(mainCtx context.Context, config *vinceConfiguration, ready 
 
 type serverCtx struct {
 	core          *rule
+	tpl           *template.Template
 	defaultServer map[string]*rule
 	address       map[string]listenOpts
 	ls1           map[string][]*rule
@@ -226,7 +252,7 @@ func (s *serverCtx) with(active listenOpts) *serverCtx {
 	return &serverCtx{core: s.core, ls1: s.ls1, ls2: s.ls2, ls3: s.ls3, active: &active}
 }
 
-func (s *serverCtx) handle(r *rule) func(http.Handler) http.Handler {
+func (s *serverCtx) handle(r *rule) func(handler) handler {
 	switch r.name {
 	case "proxy_pass":
 		p := new(proxy)
@@ -236,8 +262,8 @@ func (s *serverCtx) handle(r *rule) func(http.Handler) http.Handler {
 	}
 }
 
-func wrap(h http.Handler, halt bool) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
+func wrap(h handler, halt bool) func(handler) handler {
+	return func(next handler) handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			h.ServeHTTP(w, r)
 			if halt {
@@ -269,7 +295,7 @@ func (s *serverCtx) chain(r ...*rule) alice {
 	return a
 }
 
-func nextHandler(next http.Handler) http.Handler {
+func nextHandler(next handler) handler {
 	return next
 }
 

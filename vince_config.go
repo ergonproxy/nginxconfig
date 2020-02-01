@@ -22,6 +22,11 @@ type vinceConfiguration struct {
 	confFile string
 
 	defaultPort int
+
+	management struct {
+		enabled bool
+		port    int
+	}
 }
 
 type vinceDatabases struct {
@@ -107,6 +112,8 @@ func (db *vinceDatabases) Close() error {
 func getConfig(ctx *cli.Context) (*vinceConfiguration, error) {
 	file := ctx.String("c")
 	var c vinceConfiguration
+	c.management.enabled = true // TODO make this configurable
+	c.management.port = 9000
 	c.defaultPort = ctx.Int("p")
 	if file != "" {
 		stat, err := os.Stat(file)
