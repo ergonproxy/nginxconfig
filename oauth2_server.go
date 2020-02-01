@@ -226,7 +226,7 @@ func getOauth2Err(key oauth2Errkey) (value string) {
 }
 
 // exposes oauth2 server workflow that uses a key/value store for persistence.
-// This also allows managing of tockens.
+// This also allows managing of tokens.
 type oauth2 struct {
 	store             kvStore
 	redirectSeparator string
@@ -241,19 +241,6 @@ func (o *oauth2) init(store kvStore, opts oauth2Option) error {
 	}
 	csrf, err := store.get(oauth2CSRFTokenPrefix)
 	if err != nil {
-		return err
-	}
-	if err == nil {
-		if opts.CsrfSecret != nil {
-			if !bytes.Equal(csrf, opts.CsrfSecret) {
-				if err := store.set(oauth2CSRFTokenPrefix, []byte(opts.CsrfSecret)); err != nil {
-					return err
-				}
-			}
-		} else {
-			opts.CsrfSecret = csrf
-		}
-	} else {
 		if err != badger.ErrKeyNotFound {
 			return err
 		}
@@ -264,12 +251,19 @@ func (o *oauth2) init(store kvStore, opts oauth2Option) error {
 				return err
 			}
 			opts.CsrfSecret = secret[:]
-			if err != nil {
-				return err
-			}
 			if err := store.set(oauth2CSRFTokenPrefix, []byte(opts.CsrfSecret)); err != nil {
 				return err
 			}
+		}
+	} else {
+		if opts.CsrfSecret != nil {
+			if !bytes.Equal(csrf, opts.CsrfSecret) {
+				if err := store.set(oauth2CSRFTokenPrefix, []byte(opts.CsrfSecret)); err != nil {
+					return err
+				}
+			}
+		} else {
+			opts.CsrfSecret = csrf
 		}
 	}
 	o.templates = tpl
@@ -287,7 +281,7 @@ func generateCSRFToken() (string, error) {
 }
 
 type oauth2Option struct {
-	RedirSeparator      string   `json:"redirect_separator"`
+	RedirectSeparator   string   `json:"redirect_separator"`
 	AuthorizationExpire int64    `json:"authorization_expire"`
 	AccessExpire        int64    `json:"access_expire"`
 	AllowGetAccess      bool     `json:"allow_get_access"`
@@ -673,7 +667,7 @@ func (o *oauth2) finalize(auth *oauth2Grant, ctx *oauth2Context, usr *oauth2User
 	return nil
 }
 
-func validateURIList(baseList, redir, sep string) error {
+func validateURIList(baseList, redirect, sep string) error {
 	var list []string
 	if sep != "" {
 		list = strings.Split(baseList, sep)
@@ -681,11 +675,11 @@ func validateURIList(baseList, redir, sep string) error {
 		list = append(list, baseList)
 	}
 	for _, item := range list {
-		if err := validateURI(item, redir); err == nil {
+		if err := validateURI(item, redirect); err == nil {
 			return nil
 		}
 	}
-	return fmt.Errorf("%s : %s / %s", "url dot validate", baseList, redir)
+	return fmt.Errorf("%s : %s / %s", "url dot validate", baseList, redirect)
 
 }
 
@@ -694,8 +688,8 @@ var (
 	errOauth2FragmentURL = errors.New("oauth2: url must not include fragment")
 )
 
-func validateURI(base, redir string) error {
-	if base == "" || redir == "" {
+func validateURI(base, redirect string) error {
+	if base == "" || redirect == "" {
 		return errOauth2BlankURL
 	}
 
@@ -704,7 +698,7 @@ func validateURI(base, redir string) error {
 		return err
 	}
 
-	redirectURL, err := url.Parse(redir)
+	redirectURL, err := url.Parse(redirect)
 	if err != nil {
 		return err
 	}
@@ -713,10 +707,10 @@ func validateURI(base, redir string) error {
 		return errOauth2FragmentURL
 	}
 	if baseURL.Scheme != redirectURL.Scheme {
-		return fmt.Errorf("%s : %s / %s", "scheme mismatch", base, redir)
+		return fmt.Errorf("%s : %s / %s", "scheme mismatch", base, redirect)
 	}
 	if baseURL.Host != redirectURL.Host {
-		return fmt.Errorf("%s : %s / %s", "host mismatch", base, redir)
+		return fmt.Errorf("%s : %s / %s", "host mismatch", base, redirect)
 	}
 
 	if baseURL.Path == redirectURL.Path {
@@ -725,12 +719,12 @@ func validateURI(base, redir string) error {
 
 	reqPrefix := strings.TrimRight(baseURL.Path, "/") + "/"
 	if !strings.HasPrefix(redirectURL.Path, reqPrefix) {
-		return fmt.Errorf("%s : %s / %s", "path is not a subpath", base, redir)
+		return fmt.Errorf("%s : %s / %s", "path is not a subpath", base, redirect)
 	}
 
 	for _, s := range strings.Split(strings.TrimPrefix(redirectURL.Path, reqPrefix), "/") {
 		if s == ".." {
-			return fmt.Errorf("%s : %s / %s", "subpath cannot contain path traversial", base, redir)
+			return fmt.Errorf("%s : %s / %s", "subpath cannot contain path traversal", base, redirect)
 		}
 	}
 	return nil
