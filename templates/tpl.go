@@ -1,7 +1,6 @@
 package templates
 
 import (
-	"fmt"
 	"html/template"
 	"io/ioutil"
 	"os"
@@ -36,7 +35,6 @@ func HTML() (*template.Template, error) {
 		if err != nil {
 			return err
 		}
-		fmt.Println(t.Name())
 		_, err = t.Parse(string(b))
 		return err
 	})
