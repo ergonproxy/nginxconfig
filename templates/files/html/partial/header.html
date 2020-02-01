@@ -1,0 +1,19 @@
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <!-- load any meta tags if they are available -->
+    {{with .Meta}}
+    {{range .}}{{.html}}{{end}}
+    {{end}}
+    <!-- load custom title -->
+    {{with .Title}}
+    <title>{{.}}</title>
+    {{else}}
+    <title>vince - modern reverse proxy for modern traffic</title>
+    {{end}}
+</head>
+
+<body>
