@@ -7,12 +7,14 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/ergongate/vince/buffers"
 	"github.com/rakyll/statik/fs"
 )
 
 var htmlTpl *template.Template
 var htmlOnce sync.Once
 
+// HTML returns template with all embedded templates loaded
 func HTML() *template.Template {
 	htmlOnce.Do(func() {
 		htmlTpl = template.Must(loadHTML())
@@ -62,6 +64,7 @@ type Context struct {
 	Footer []Element
 }
 
+// Element interface for a safe html element.
 type Element interface {
 	HTML() template.HTML
 }
@@ -83,19 +86,14 @@ func (m attribute) html(s *strings.Builder) string {
 	return s.String()
 }
 
-var stringsBuffer = &sync.Pool{
-	New: func() interface{} {
-		return new(strings.Builder)
-	},
-}
-
+// Meta defines attributes for html meta tag
 type Meta map[string]string
 
+// HTML returns html meta tag
 func (m Meta) HTML() template.HTML {
-	s := stringsBuffer.Get().(*strings.Builder)
+	s := buffers.GetString()
 	defer func() {
-		s.Reset()
-		stringsBuffer.Put(s)
+		buffers.PutString(s)
 	}()
 	s.WriteString("<meta ")
 	attribute(m).html(s)

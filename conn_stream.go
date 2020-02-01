@@ -5,18 +5,12 @@ import (
 	"net"
 	"net/http"
 	"strconv"
-	"sync"
 	"time"
 
+	"github.com/ergongate/vince/buffers"
 	"github.com/uber-go/tally"
 	"go.uber.org/atomic"
 )
-
-var bytesPool = &sync.Pool{
-	New: func() interface{} {
-		return make([]byte, 1024)
-	},
-}
 
 type connConfig struct {
 	readTimeout  time.Duration
@@ -69,9 +63,9 @@ func proxyConn(ctx context.Context, opts proxyConnOpts, local, remote net.Conn, 
 	firstRemote.Store(true)
 	firstLocal.Store(true)
 	go func() {
-		buf := bytesPool.Get().([]byte)
+		buf := buffers.GetSlice()
 		defer func() {
-			bytesPool.Put(buf[:0])
+			buffers.PutSlice(buf)
 		}()
 		buf = buf[:0]
 		for {
@@ -106,9 +100,9 @@ func proxyConn(ctx context.Context, opts proxyConnOpts, local, remote net.Conn, 
 			ts.upstream.bytesWritten.RecordValue(float64(n))
 		}
 	}()
-	buf := bytesPool.Get().([]byte)
+	buf := buffers.GetSlice()
 	defer func() {
-		bytesPool.Put(buf[:0])
+		buffers.PutSlice(buf)
 	}()
 	for {
 		if ctx.Err() != nil {
