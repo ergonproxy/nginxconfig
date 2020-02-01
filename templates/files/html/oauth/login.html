@@ -1,0 +1,9 @@
+[[template "partial/header.html" .]]
+<section>
+    <form method="post" action="{{.Action}}">
+        <p><input type="text" name="login_username" value="" placeholder="Username or Email"></p>
+        <p><input type="password" name="login_password" value="" placeholder="Password"></p>
+        <p><input type="submit" name="commit" value="Login"></p>
+    </form>
+</section>
+[[template "partial/footer.html" .]]

@@ -501,7 +501,7 @@ func (o *oauth2) authorize(w http.ResponseWriter, r *http.Request) error {
 	}
 	if usr == nil {
 		// serve login page
-		return o.templates.ExecuteTemplate(w, "oauth2_login.html", map[string]interface{}{
+		return o.templates.ExecuteTemplate(w, "oauth/login.html", map[string]interface{}{
 			"Action": r.URL.String(),
 			"Title":  "vince oauth login",
 		})
