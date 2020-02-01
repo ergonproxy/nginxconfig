@@ -153,11 +153,7 @@ func process(ctx context.Context, srvCtx *serverCtx, config *vinceConfiguration)
 func startEverything(mainCtx context.Context, config *vinceConfiguration, ready ...func()) error {
 	ctx, cancel := context.WithCancel(mainCtx)
 	defer cancel()
-	fs, err := templates.NewIncludeFS()
-	if err != nil {
-		return err
-	}
-	p := parse(config.confFile, fs, defaultParseOpts())
+	p := parse(config.confFile, templates.IncludeFS, defaultParseOpts())
 	if p.Errors != nil {
 		return fmt.Errorf("vince: parsing config %v", p.Errors)
 	}

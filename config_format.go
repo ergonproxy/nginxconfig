@@ -20,11 +20,8 @@ type formatOption struct {
 func format(file string, opts formatOption) error {
 	cfg := defaultParseOpts()
 	cfg.comments = true
-	fs, err := templates.NewIncludeFS()
-	if err != nil {
-		return err
-	}
-	p := parse(file, fs, cfg)
+
+	p := parse(file, templates.IncludeFS, cfg)
 	if p.Errors != nil {
 		return p.Errors[0]
 	}
