@@ -51,9 +51,10 @@ func (r rule) String() string {
 func (r *rule) collect(n *rule) []*rule {
 	var v []*rule
 	if n == nil {
+		v = r.children
 	} else {
 		for _, a := range r.children {
-			if a.name == n.name {
+			if a == n {
 				break
 			}
 			v = append(v, a)
@@ -527,11 +528,8 @@ func vinceHandler(ctx context.Context, servers []*rule) http.Handler {
 		}
 		if l := loc.match(r.URL.Path); l != nil {
 			c := l.collect(nil)
-			// we start by executing child block
-			block := srvCtx.chain(l.children...)
-			// then we traverse the parents
-			parent := srvCtx.chain(overide(c)...)
-			block.then(parent.then(noopHandler{})).ServeHTTP(w, r)
+			srvCtx.chain(overide(c)...).then(nil).ServeHTTP(w, r)
+			return
 		}
 		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 	})
