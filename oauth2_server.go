@@ -1112,18 +1112,15 @@ func (o *oauth2) extraScopes(access, refresh string) bool {
 	acessList := strings.Split(access, ",")
 	refreshList := strings.Split(refresh, ",")
 
-	var found bool
-END:
 	for _, rScope := range refreshList {
 
 		for _, aScope := range acessList {
 			if rScope != "" && aScope != "" && aScope == rScope {
-				found = true
-				break END
+				return true
 			}
 		}
 	}
-	return found
+	return false
 }
 
 type basicAuth struct {
