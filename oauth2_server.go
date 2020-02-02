@@ -164,6 +164,7 @@ type oauth2Token struct {
 	ExpiresIn int64
 	CreatedAT time.Time
 	UpdatedAt time.Time
+	DeletedAt time.Time
 }
 
 type oauth2Grant struct {
@@ -180,6 +181,7 @@ type oauth2Grant struct {
 	ExpiresIn      int64
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+	DeletedAt      time.Time
 }
 
 func (g oauth2Grant) expired() bool {
@@ -196,6 +198,7 @@ type oauth2Client struct {
 	RedirectURL string
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+	DeletedAt   time.Time
 }
 
 type oauth2User struct {
@@ -206,6 +209,7 @@ type oauth2User struct {
 	Password  string
 	CreatedAt time.Time
 	UpdatedAt time.Time
+	DeletedAt time.Time
 }
 
 var oauth2Errors = map[oauth2Errkey]string{
@@ -712,25 +716,61 @@ func (o *oauth2) finalize(auth *oauth2Grant, ctx *oauth2Context) error {
 		ctx.data[oauth2ParamScope] = access.Scope
 	}
 	if auth.Code != "" {
-		return o.removeGrant(auth)
+		return o.removeGrant(auth.Code)
 	}
 	return nil
 }
 
-func (o *oauth2) removeGrant(g *oauth2Grant) error {
-	if g.AccessToken != "" {
-		err := o.store.remove(joinSlice(oauth2GrantPrefix, []byte(g.AccessToken)))
+func (o *oauth2) removeGrant(id string) error {
+	grant, err := o.grant(id)
+	if err != nil {
+		return err
+	}
+	if !grant.DeletedAt.IsZero() {
+		return nil
+	}
+	grant.DeletedAt = time.Now()
+	if grant.AccessToken != "" {
+		err := o.store.remove(joinSlice(oauth2GrantPrefix, []byte(grant.AccessToken)))
+		if err != nil {
+			return err
+		}
+		err = o.removeToken(grant.AccessToken)
 		if err != nil {
 			return err
 		}
 	}
-	if g.RefreshToken != "" {
-		err := o.store.remove(joinSlice(oauth2GrantPrefix, []byte(g.RefreshToken)))
+	if grant.RefreshToken != "" {
+		err := o.store.remove(joinSlice(oauth2GrantPrefix, []byte(grant.RefreshToken)))
+		if err != nil {
+			return err
+		}
+		err = o.removeToken(grant.RefreshToken)
 		if err != nil {
 			return err
 		}
 	}
-	return o.store.remove(joinSlice(oauth2GrantPrefix, []byte(g.Code)))
+	return o.marshalSet(joinSlice(oauth2GrantPrefix, []byte(id)), grant)
+}
+
+func (o *oauth2) removeToken(id string) error {
+	tok, err := o.token(id)
+	if err != nil {
+		return err
+	}
+	if !tok.DeletedAt.IsZero() {
+		return nil
+	}
+	tok.DeletedAt = time.Now()
+	return o.marshalSet(joinSlice(oauth2TokenPrefix, []byte(id)), tok)
+}
+
+func (o *oauth2) marshalSet(key []byte, v interface{}) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	return o.store.set(key, b)
 }
 
 func validateURIList(baseList, redirect, sep string) error {
@@ -819,6 +859,9 @@ func (o *oauth2) client(id string) (*oauth2Client, error) {
 	if err := json.Unmarshal(b, &c); err != nil {
 		return nil, err
 	}
+	if !c.DeletedAt.IsZero() {
+		return nil, badger.ErrKeyNotFound
+	}
 	return &c, nil
 }
 
@@ -830,6 +873,9 @@ func (o *oauth2) grant(id string) (*oauth2Grant, error) {
 	var c oauth2Grant
 	if err := json.Unmarshal(b, &c); err != nil {
 		return nil, err
+	}
+	if !c.DeletedAt.IsZero() {
+		return nil, badger.ErrKeyNotFound
 	}
 	return &c, nil
 }
@@ -843,6 +889,9 @@ func (o *oauth2) token(id string) (*oauth2Token, error) {
 	if err := json.Unmarshal(b, &c); err != nil {
 		return nil, err
 	}
+	if !c.DeletedAt.IsZero() {
+		return nil, badger.ErrKeyNotFound
+	}
 	return &c, nil
 }
 
@@ -854,6 +903,9 @@ func (o *oauth2) user(email string) (*oauth2User, error) {
 	var u oauth2User
 	if err := json.Unmarshal(b, &u); err != nil {
 		return nil, err
+	}
+	if !u.DeletedAt.IsZero() {
+		return nil, badger.ErrKeyNotFound
 	}
 	return nil, nil
 }
