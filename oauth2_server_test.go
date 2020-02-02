@@ -35,4 +35,20 @@ func TestOauth2(t *testing.T) {
 			t.Error(err)
 		}
 	})
+	t.Run("ExtraScopes", func(t *testing.T) {
+		sample := []struct {
+			access, refresh string
+			result          bool
+		}{
+			{"one,two,three", "one", true},
+			{"one,two,three", "none", false},
+		}
+		var o oauth2
+
+		for _, scope := range sample {
+			if e := o.extraScopes(scope.access, scope.refresh); e != scope.result {
+				t.Errorf("expected %v got %v  aceess: %s refresh:: %s", scope.result, e, scope.access, scope.refresh)
+			}
+		}
+	})
 }
