@@ -35,14 +35,13 @@ type PrefixFallbackFS string
 // Open joins f with name before opening the file if the file is missing this
 // will use os.Open(name) instead.
 func (f PrefixFallbackFS) Open(name string) (file http.File, err error) {
-	if path.IsAbs(name) {
-		file, err = get().Open(path.Join(string(f), name))
+	file, err = get().Open(path.Join(string(f), name))
+	if err != nil {
 		if os.IsNotExist(err) {
 			return os.Open(name)
 		}
-		return
 	}
-	return os.Open(name)
+	return file, err
 }
 
 // IncludeFS fs for embedded include configurations

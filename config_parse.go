@@ -117,35 +117,13 @@ func parseInternal(fs http.FileSystem, parsing *parsingContext, tokens *tokenIte
 		}
 		if !parsing.opts.single && stmt.Directive == "include" {
 			pattern := stmt.Args[0]
-			if !filepath.IsAbs(pattern) {
-				pattern = filepath.Join(parsing.opts.configDir, pattern)
-			}
 			var filenames []string
-			if strings.Contains(pattern, "*") {
-				n, err := filepath.Glob(pattern)
-				if err != nil {
-					parsing.handleErr(
-						&NgxError{
-							Reason:   err.Error(),
-							Linenum:  stmt.Line,
-							Filename: parsing.File,
-						},
-					)
-				} else {
-					filenames = n
-					sort.Strings(filenames)
+			inc, err := fs.Open(pattern)
+			if err != nil {
+				if !filepath.IsAbs(pattern) {
+					pattern = filepath.Join(parsing.opts.configDir, pattern)
 				}
-			} else {
-				f, err := fs.Open(pattern)
-				if err != nil {
-					parsing.handleErr(
-						&NgxError{
-							Reason:   err.Error(),
-							Linenum:  stmt.Line,
-							Filename: parsing.File,
-						},
-					)
-				} else {
+				if strings.Contains(pattern, "*") {
 					n, err := filepath.Glob(pattern)
 					if err != nil {
 						parsing.handleErr(
@@ -157,10 +135,38 @@ func parseInternal(fs http.FileSystem, parsing *parsingContext, tokens *tokenIte
 						)
 					} else {
 						filenames = n
+						sort.Strings(filenames)
 					}
-					f.Close()
-				}
+				} else {
+					f, err := fs.Open(pattern)
+					if err != nil {
+						parsing.handleErr(
+							&NgxError{
+								Reason:   err.Error(),
+								Linenum:  stmt.Line,
+								Filename: parsing.File,
+							},
+						)
+					} else {
+						n, err := filepath.Glob(pattern)
+						if err != nil {
+							parsing.handleErr(
+								&NgxError{
+									Reason:   err.Error(),
+									Linenum:  stmt.Line,
+									Filename: parsing.File,
+								},
+							)
+						} else {
+							filenames = n
+						}
+						f.Close()
+					}
 
+				}
+			} else {
+				inc.Close()
+				filenames = []string{pattern}
 			}
 			for _, name := range filenames {
 				parsing.opts.included[name] = len(parsing.opts.includes)
