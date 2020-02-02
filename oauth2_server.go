@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -181,9 +182,13 @@ type oauth2Grant struct {
 	UpdatedAt      time.Time
 }
 
+func (g oauth2Grant) expired() bool {
+	return g.CreatedAt.Add(time.Duration(g.ExpiresIn) * time.Second).Before(time.Now())
+}
+
 type oauth2Client struct {
 	ID          oauth2ClientID
-	UserID      int64
+	UserID      string
 	Name        string
 	Secret      string
 	Grants      []string
@@ -307,6 +312,15 @@ func (o *oauth2Option) init() {
 	o.AuthEndpoint = "/authorize"
 	o.TokenEndpoint = "/tokens"
 	o.InfoEndpoint = "/info"
+}
+
+func (o *oauth2Option) accessAllowed(grantType string) bool {
+	for _, v := range o.AllowedAccessType {
+		if v == grantType {
+			return true
+		}
+	}
+	return false
 }
 
 func (o *oauth2Option) load(r *rule) error {
@@ -552,7 +566,7 @@ func (o *oauth2) authorize(w http.ResponseWriter, r *http.Request) error {
 		grant.RedirectURL = redirectURI
 		grant.ClientID = client.ID
 		grant.UserID = usr.Email
-		if err = o.finalize(grant, &ctx, usr); err != nil {
+		if err = o.finalize(grant, &ctx); err != nil {
 			ctx.setErrState(oauth2ErrServerError, "", state)
 			ctx.internalErr = err
 			return ctx.commit(w)
@@ -589,6 +603,34 @@ func (o *oauth2) saveClient(c *oauth2Client) error {
 	return o.store.set(joinSlice(oauth2ClientPrefix, []byte(c.ID)), b)
 }
 
+func (o *oauth2) clientWithSecret(basic basicAuth) (*oauth2Client, error) {
+	c, err := o.client(basic.UserName)
+	if err != nil {
+		return nil, err
+	}
+	if err = compareHashedString(c.Secret, basic.Password); err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
+func (o *oauth2) grantByClient(c *oauth2Client, code string) (*oauth2Grant, error) {
+	for _, v := range c.Grants {
+		if v == code {
+			return o.grant(code)
+		}
+	}
+	return nil, badger.ErrKeyNotFound
+}
+
+func (o *oauth2) clientWithCode(bearer bearerAuth) (*oauth2Client, error) {
+	c, err := o.token(bearer.Code)
+	if err != nil {
+		return nil, err
+	}
+	return o.client(string(c.ClientID))
+}
+
 func (o *oauth2) saveToken(c *oauth2Token) error {
 	var err error
 	c.UpdatedAt = time.Now()
@@ -606,10 +648,22 @@ func (o *oauth2) saveGrant(c *oauth2Grant) error {
 	if err != nil {
 		return err
 	}
+	if c.AccessToken != "" {
+		err = o.store.set(joinSlice(oauth2ClientPrefix, []byte(c.AccessToken)), b)
+		if err != nil {
+			return err
+		}
+	}
+	if c.RefreshToken != "" {
+		err = o.store.set(joinSlice(oauth2ClientPrefix, []byte(c.RefreshToken)), b)
+		if err != nil {
+			return err
+		}
+	}
 	return o.store.set(joinSlice(oauth2ClientPrefix, []byte(c.Code)), b)
 }
 
-func (o *oauth2) finalize(auth *oauth2Grant, ctx *oauth2Context, usr *oauth2User) error {
+func (o *oauth2) finalize(auth *oauth2Grant, ctx *oauth2Context) error {
 	access := new(oauth2Grant)
 	access.ClientID = auth.ClientID
 	access.UserID = auth.UserID
@@ -658,9 +712,25 @@ func (o *oauth2) finalize(auth *oauth2Grant, ctx *oauth2Context, usr *oauth2User
 		ctx.data[oauth2ParamScope] = access.Scope
 	}
 	if auth.Code != "" {
-		return o.store.remove(joinSlice(oauth2GrantPrefix, []byte(auth.Code)))
+		return o.removeGrant(auth)
 	}
 	return nil
+}
+
+func (o *oauth2) removeGrant(g *oauth2Grant) error {
+	if g.AccessToken != "" {
+		err := o.store.remove(joinSlice(oauth2GrantPrefix, []byte(g.AccessToken)))
+		if err != nil {
+			return err
+		}
+	}
+	if g.RefreshToken != "" {
+		err := o.store.remove(joinSlice(oauth2GrantPrefix, []byte(g.RefreshToken)))
+		if err != nil {
+			return err
+		}
+	}
+	return o.store.remove(joinSlice(oauth2GrantPrefix, []byte(g.Code)))
 }
 
 func validateURIList(baseList, redirect, sep string) error {
@@ -752,6 +822,30 @@ func (o *oauth2) client(id string) (*oauth2Client, error) {
 	return &c, nil
 }
 
+func (o *oauth2) grant(id string) (*oauth2Grant, error) {
+	b, err := o.store.get(joinSlice(oauth2GrantPrefix, []byte(id)))
+	if err != nil {
+		return nil, err
+	}
+	var c oauth2Grant
+	if err := json.Unmarshal(b, &c); err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
+func (o *oauth2) token(id string) (*oauth2Token, error) {
+	b, err := o.store.get(joinSlice(oauth2TokenPrefix, []byte(id)))
+	if err != nil {
+		return nil, err
+	}
+	var c oauth2Token
+	if err := json.Unmarshal(b, &c); err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
 func (o *oauth2) user(email string) (*oauth2User, error) {
 	b, err := o.store.get(joinSlice(oauth2UserPrefix, []byte(email)))
 	if err != nil {
@@ -778,4 +872,272 @@ func (o *oauth2) valid(username, password string) (*oauth2User, error) {
 
 func compareHashedString(hashed, str string) error {
 	return bcrypt.CompareHashAndPassword([]byte(hashed), []byte(str))
+}
+
+func (o *oauth2) access(w http.ResponseWriter, r *http.Request) error {
+	var ctx oauth2Context
+	ctx.init()
+	if r.Method == http.MethodGet {
+		if !o.opts.AllowGetAccess {
+			ctx.setErrState(oauth2ErrInvalidRequest, "", "")
+			ctx.internalErr = errors.New("GET access not allowed")
+			return ctx.commit(w)
+		}
+	}
+	if r.Method != http.MethodPost {
+		ctx.setErrState(oauth2ErrInvalidRequest, "", "")
+		ctx.internalErr = errors.New("only POST methods are allowedallowed")
+		return ctx.commit(w)
+	}
+	_ = r.ParseForm()
+	accessGrant := r.Form.Get(oauth2ParamGrantType)
+	redirectURI := r.Form.Get(oauth2ParamRedirectURL)
+	scope := r.Form.Get(oauth2ParamScope)
+	code := r.Form.Get(oauth2ParamCode)
+
+	var basic basicAuth
+	if err := basic.init(r, true); err != nil {
+		ctx.setErrState(oauth2ErrInvalidClient, "", "")
+		ctx.internalErr = err
+		return ctx.commit(w)
+	}
+	if o.opts.accessAllowed(accessGrant) {
+		switch accessGrant {
+		case oauth2GrantTypeAuthorizationCode:
+			if code == "" {
+				ctx.setErrState(oauth2ErrUnsupportedGrantType, "", "")
+				return ctx.commit(w)
+			}
+			client, err := o.clientWithSecret(basic)
+			if err != nil {
+				ctx.setErrState(oauth2ErrUnauthorizedClient, "", "")
+				ctx.internalErr = err
+				return ctx.commit(w)
+			}
+			grant, err := o.grantByClient(client, code)
+			if err != nil {
+				ctx.setErrState(oauth2ErrInvalidGrant, "", "")
+				ctx.internalErr = err
+				return ctx.commit(w)
+			}
+			if grant.expired() {
+				ctx.setErrState(oauth2ErrInvalidGrant, "", "")
+				return ctx.commit(w)
+			}
+			if redirectURI == "" {
+				redirectURI = firstURI(client.RedirectURL, o.opts.RedirectSeparator)
+			}
+
+			if err = validateURIList(client.RedirectURL, redirectURI, o.opts.RedirectSeparator); err != nil {
+				ctx.setErrState(oauth2ErrInvalidRequest, "", "")
+				ctx.internalErr = err
+				return ctx.commit(w)
+			}
+			if err = o.finalize(grant, &ctx); err != nil {
+				ctx.setErrState(oauth2ErrServerError, "", "")
+				ctx.internalErr = err
+				return ctx.commit(w)
+			}
+			return ctx.commit(w)
+		case oauth2GrantTypeRefreshToken:
+			refreshToken := r.Form.Get(oauth2ParamRefreshToken)
+			if refreshToken == "" {
+				ctx.setErrState(oauth2ErrInvalidGrant, "", "")
+				return ctx.commit(w)
+			}
+			client, err := o.clientWithSecret(basic)
+			if err != nil {
+				ctx.setErrState(oauth2ErrUnauthorizedClient, "", "")
+				ctx.internalErr = err
+				return ctx.commit(w)
+			}
+			grant, err := o.grant(refreshToken)
+			if err != nil {
+				ctx.setErrState(oauth2ErrInvalidGrant, "", "")
+				ctx.internalErr = err
+				return ctx.commit(w)
+			}
+			if grant.ClientID != client.ID {
+				ctx.setErrState(oauth2ErrUnauthorizedClient, "", "")
+				return ctx.commit(w)
+			}
+			authGrant := &oauth2Grant{
+				Scope:       scope,
+				RedirectURL: grant.RedirectURL,
+			}
+
+			if authGrant.Scope == "" {
+				authGrant.Scope = grant.Scope
+			}
+			if o.extraScopes(grant.Scope, authGrant.Scope) {
+				ctx.setErrState(oauth2ErrAccessDenied, "", "")
+				return ctx.commit(w)
+			}
+			if err = o.finalize(grant, &ctx); err != nil {
+				ctx.setErrState(oauth2ErrServerError, "", "")
+				ctx.internalErr = err
+				return ctx.commit(w)
+			}
+			return ctx.commit(w)
+		case oauth2GrantTypePassword:
+			username := r.Form.Get("username")
+			password := r.Form.Get("password")
+			if username == "" || password == "" {
+				ctx.setErrState(oauth2ErrInvalidGrant, "", "")
+				return ctx.commit(w)
+			}
+			usr, err := o.valid(username, password)
+			if err != nil {
+				ctx.setErrState(oauth2ErrInvalidGrant, "", "")
+				ctx.internalErr = err
+				return ctx.commit(w)
+			}
+			client, err := o.clientWithSecret(basic)
+			if err != nil {
+				ctx.setErrState(oauth2ErrUnauthorizedClient, "", "")
+				ctx.internalErr = err
+				return ctx.commit(w)
+			}
+			grant := &oauth2Grant{
+				Scope:    scope,
+				UserID:   usr.Email,
+				ClientID: client.ID,
+			}
+			if err = o.finalize(grant, &ctx); err != nil {
+				ctx.setErrState(oauth2ErrServerError, "", "")
+				ctx.internalErr = err
+				return ctx.commit(w)
+			}
+			return ctx.commit(w)
+		case oauth2GrantTypeClientCredentials:
+			client, err := o.clientWithSecret(basic)
+			if err != nil {
+				ctx.setErrState(oauth2ErrUnauthorizedClient, "", "")
+				ctx.internalErr = err
+				return ctx.commit(w)
+			}
+			grant := &oauth2Grant{
+				Scope:    scope,
+				ClientID: client.ID, UserID: client.UserID,
+			}
+			if err = o.finalize(grant, &ctx); err != nil {
+				ctx.setErrState(oauth2ErrServerError, "", "")
+				ctx.internalErr = err
+				return ctx.commit(w)
+			}
+			return ctx.commit(w)
+		case oauth2GrantTypeAssertion:
+			assertionTyp := r.Form.Get(oauth2ParamAssertionType)
+			assertion := r.Form.Get(oauth2ParamAssertion)
+			if assertionTyp == "" || assertion == "" {
+				ctx.setErrState(oauth2ErrInvalidGrant, "", "")
+				return ctx.commit(w)
+			}
+			client, err := o.clientWithSecret(basic)
+			if err != nil {
+				ctx.setErrState(oauth2ErrUnauthorizedClient, "", "")
+				ctx.internalErr = err
+				return ctx.commit(w)
+			}
+			redirectURI = firstURI(client.RedirectURL, o.opts.RedirectSeparator)
+			grant := &oauth2Grant{
+				Scope:       scope,
+				RedirectURL: redirectURI,
+			}
+			if err = o.finalize(grant, &ctx); err != nil {
+				ctx.setErrState(oauth2ErrServerError, "", "")
+				ctx.internalErr = err
+				return ctx.commit(w)
+			}
+			return ctx.commit(w)
+		}
+	}
+	ctx.setErrState(oauth2ErrUnsupportedGrantType, "", "")
+	return ctx.commit(w)
+}
+
+func (o *oauth2) extraScopes(access, refresh string) bool {
+	acessList := strings.Split(access, ",")
+	refreshList := strings.Split(refresh, ",")
+
+	var found bool
+END:
+	for _, rScope := range refreshList {
+
+		for _, aScope := range acessList {
+			if rScope != "" && aScope != "" && aScope == rScope {
+				found = true
+				break END
+			}
+		}
+	}
+	return found
+}
+
+type basicAuth struct {
+	UserName string
+	Password string
+}
+
+func (b *basicAuth) init(r *http.Request, allowQueryParams bool) error {
+	b.UserName = r.Form.Get("client_id")
+	b.Password = r.Form.Get("client_secret")
+	if allowQueryParams && b.Password != "" && b.UserName != "" {
+		return nil
+	}
+	return b.check(r)
+}
+
+func (b *basicAuth) check(r *http.Request) error {
+	var (
+		basic                   = "Basic"
+		authorize               = "Authorization"
+		errInvalidUthorizeHader = errors.New("Invalid authorization header")
+	)
+	authHeader := r.Header.Get(authorize)
+	components := strings.SplitN(authHeader, " ", 2)
+
+	if len(components) != 2 || components[0] != basic {
+		return errInvalidUthorizeHader
+	}
+
+	base, err := base64.StdEncoding.DecodeString(components[1])
+	if err != nil {
+		return err
+	}
+
+	keyPairs := strings.SplitN(string(base), ":", 2)
+	if len(keyPairs) != 2 {
+		return errInvalidUthorizeHader
+	}
+	b.UserName = keyPairs[0]
+	b.Password = keyPairs[1]
+	return nil
+}
+
+type bearerAuth struct {
+	Code string
+}
+
+func (b *bearerAuth) init(r *http.Request) bool {
+	var (
+		auth   = "Authorization"
+		code   = "code"
+		bearer = "Bearer"
+	)
+
+	authHeader := r.Header.Get(auth)
+	authCode := r.Form.Get(code)
+	if authHeader == "" && authCode == "" {
+		return false
+	}
+	if authHeader != "" {
+		components := strings.SplitN(authHeader, " ", 2)
+		if (len(components) != 2 || components[0] != bearer) && authCode == "" {
+			return false
+		}
+		authCode = components[1]
+	}
+	b.Code = authCode
+	return true
 }
