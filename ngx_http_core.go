@@ -658,3 +658,42 @@ func parseListen(r *rule, defaultPort string) listenOpts {
 	}
 	return ls
 }
+
+type httpCoreConfig struct {
+	root   stringValue
+	alias  stringValue
+	client struct {
+		body struct {
+			bufferSize intValue
+			timeout    durationValue
+			maxSize    intValue
+		}
+	}
+}
+
+func (c *httpCoreConfig) load(r *rule) error {
+	switch r.name {
+	case "root":
+		c.root.store(r.args[0])
+	case "alias":
+		c.alias.store(r.args[0])
+	case "client_body_buffer_size":
+		v, err := bytefmt.ToBytes(r.args[0])
+		if err != nil {
+			return err
+		}
+		c.client.body.bufferSize.store(int64(v))
+	case "client_body_timeout":
+		v, err := time.ParseDuration(r.args[0])
+		if err != nil {
+			return err
+		}
+		c.client.body.timeout.store(v)
+	case "client_max_body_size":
+		v, err := bytefmt.ToBytes(r.args[0])
+		if err != nil {
+			return err
+		}
+		c.client.body.bufferSize.store(int64(v))
+	}
+}
