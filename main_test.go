@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -14,14 +15,16 @@ import (
 	"text/template"
 )
 
+type testKase func(context.Context, *testing.T)
+
 // make sure that vince started with configuration and calls kase after vince is
 // up and running.
 //
 // This will make sure all resources are cleared/released before the function exits.
-func runTest(t *testing.T, v *vinceConfiguration, kase ...func(context.Context, *testing.T)) {
+func runTest(t *testing.T, v *vinceConfiguration, kase ...testKase) {
+	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	fmt.Println("starting tests")
 	ready := make(chan bool)
 	go func() {
 		err := startEverything(ctx, v, func() {
@@ -79,16 +82,21 @@ func checkBody(file string) httpCheckFn {
 	}
 }
 
-func runHTTP(ctx context.Context, t *testing.T, r *http.Request, checks ...httpCheckFn) {
-	t.Helper()
-	res, err := http.DefaultClient.Do(r)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	defer res.Body.Close()
-	for _, f := range checks {
-		f(ctx, t, res)
+func runHTTP(method string, uri string, body io.Reader, checks ...httpCheckFn) testKase {
+	return func(ctx context.Context, t *testing.T) {
+		t.Run(uri, func(t *testing.T) {
+			t.Helper()
+			r, _ := http.NewRequest(method, uri, body)
+			res, err := http.DefaultClient.Do(r)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			defer res.Body.Close()
+			for _, f := range checks {
+				f(ctx, t, res)
+			}
+		})
 	}
 }
 

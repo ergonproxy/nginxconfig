@@ -67,17 +67,6 @@ func (r *rule) collect(n *rule) []*rule {
 }
 
 func overide(rules []*rule) []*rule {
-	m := make(map[string]int)
-	var remove []int
-	for k, v := range rules {
-		if i, ok := m[v.name]; ok {
-			remove = append(remove, i)
-		}
-		m[v.name] = k
-	}
-	for _, i := range remove {
-		rules = append(rules[:i], rules[i+1:]...)
-	}
 	return rules
 }
 
@@ -249,7 +238,16 @@ func (s *serverCtx) handle(r *rule) func(handler) handler {
 	switch r.name {
 	case "proxy_pass":
 		p := new(proxy)
+		p.init(r.parent, baseTransport)
 		return wrap(p, true)
+	case "allow":
+		a := new(nginxAccess)
+		a.init(r.args[0], true)
+		return a.handle
+	case "deny":
+		a := new(nginxAccess)
+		a.init(r.args[0], false)
+		return a.handle
 	default:
 		return nextHandler
 	}
@@ -361,16 +359,20 @@ type match struct {
 	re   *regexp.Regexp
 }
 
-func (ls *locationMatch) match(path string) *rule {
+func (ls *locationMatch) match(path string) *match {
 	for i := 0; i < len(ls.rules); i++ {
 		if ls.rules[i].kind == matchExact && ls.rules[i].rule.args[1] == path {
-			return ls.rules[i].rule
+			return ls.rules[i]
 		}
 	}
 	var m []*match
 	for i := 0; i < len(ls.rules); i++ {
 		switch ls.rules[i].kind {
-		case matchPrefix, matchCaret:
+		case matchPrefix:
+			if strings.HasPrefix(path, ls.rules[i].rule.args[0]) {
+				m = append(m, ls.rules[i])
+			}
+		case matchCaret:
 			if strings.HasPrefix(path, ls.rules[i].rule.args[1]) {
 				m = append(m, ls.rules[i])
 			}
@@ -383,7 +385,7 @@ func (ls *locationMatch) match(path string) *rule {
 		})
 		selected = m[0]
 		if selected.kind == matchCaret {
-			return selected.rule
+			return selected
 		}
 	}
 	var up *locationMatch
@@ -395,7 +397,7 @@ func (ls *locationMatch) match(path string) *rule {
 		for i := 0; i < len(up.rules); i++ {
 			if up.rules[i].kind == matchRegexp {
 				if up.rules[i].re.MatchString(path) {
-					return up.rules[i].rule
+					return up.rules[i]
 				}
 			}
 		}
@@ -404,14 +406,14 @@ func (ls *locationMatch) match(path string) *rule {
 		for i := 0; i < len(up.rules); i++ {
 			if ls.rules[i].kind == matchRegexp {
 				if ls.rules[i].re.MatchString(path) {
-					return ls.rules[i].rule
+					return ls.rules[i]
 				}
 			}
 		}
 	}
 
 	if selected != nil {
-		return selected.rule
+		return selected
 	}
 	return nil
 }
@@ -521,6 +523,7 @@ func vinceHandler(ctx context.Context, servers []*rule) http.Handler {
 
 	location := new(sync.Map)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Println("[main]=> ", r.URL.Path)
 		ctx := r.Context()
 		variable := ctx.Value(variables{}).(*sync.Map)
 		setRequestVariables(variable, r)
@@ -542,7 +545,8 @@ func vinceHandler(ctx context.Context, servers []*rule) http.Handler {
 			location.Store(srv, loc)
 		}
 		if l := loc.match(r.URL.Path); l != nil {
-			c := l.collect(nil)
+			c := l.rule.collect(nil)
+			variable.Store(vRequestMatchKind, l)
 			srvCtx.chain(overide(c)...).then(nil).ServeHTTP(w, r)
 			return
 		}
@@ -558,7 +562,7 @@ type alice []func(handler) handler
 
 func (a alice) then(h handler) handler {
 	if h == nil {
-		h = noopHandler{}
+		h = notFoundHandler{}
 	}
 	for i := range a {
 		h = a[len(a)-1-i](h)
@@ -566,9 +570,11 @@ func (a alice) then(h handler) handler {
 	return h
 }
 
-type noopHandler struct{}
+type notFoundHandler struct{}
 
-func (noopHandler) ServeHTTP(http.ResponseWriter, *http.Request) {}
+func (notFoundHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+}
 
 func findListener(r *rule, port int) []listenOpts {
 	p := strconv.Itoa(port)

@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"net/http"
+	"testing"
+)
 
 func TestAccess(t *testing.T) {
 	file := `daemon off;
@@ -45,5 +48,17 @@ http {
 		t.Fatal(err)
 	}
 	defer clear()
-	runTest(t, c)
+	host := "http://localhost:8080"
+	runTest(t, c,
+		runHTTP(http.MethodGet, host+"/inet/allow_all", nil, checkCode(404)),
+		runHTTP(http.MethodGet, host+"/inet/allow_unix", nil, checkCode(404)),
+		runHTTP(http.MethodGet, host+"/inet/deny_all", nil, checkCode(403)),
+		runHTTP(http.MethodGet, host+"/inet/deny_unix", nil, checkCode(404)),
+
+		runHTTP(http.MethodGet, host+"/unix/allow_all", nil, checkCode(404)),
+		runHTTP(http.MethodGet, host+"/unix/allow_unix", nil, checkCode(404)),
+		runHTTP(http.MethodGet, host+"/unix/deny_all", nil, checkCode(403)),
+		runHTTP(http.MethodGet, host+"/unix/deny_unix", nil, checkCode(404)),
+	)
+
 }

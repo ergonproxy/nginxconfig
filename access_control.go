@@ -3,6 +3,10 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"net"
+	"net/http"
+	"strings"
+
 	"github.com/casbin/casbin/v2"
 	"github.com/casbin/casbin/v2/model"
 	"github.com/casbin/casbin/v2/persist"
@@ -95,4 +99,66 @@ func (a *accessControl) reload(key []byte) {
 			// TODO:(gernest) log error
 		}
 	}
+}
+
+type nginxAccess struct {
+	allow bool
+	addr  string
+	match func(*http.Request) bool
+}
+
+func (a *nginxAccess) init(addr string, allow bool) {
+	a.allow = allow
+	a.addr = addr
+	a.match = func(_ *http.Request) bool { return false }
+	if addr == "all" {
+		a.match = func(_ *http.Request) bool { return true }
+	} else if addr == "unix:" {
+		a.match = func(r *http.Request) bool {
+			return false
+		}
+	} else if ip := net.ParseIP(addr); ip != nil {
+		a.match = a.matchIP(ip)
+	}
+}
+
+func (a *nginxAccess) matchIP(ip net.IP) func(r *http.Request) bool {
+	return func(r *http.Request) bool {
+		if ap := realIP(r); ap != nil {
+			return ip.Equal(ap)
+		}
+		return false
+	}
+}
+
+func realIP(r *http.Request) net.IP {
+	return net.ParseIP(realIPString(r))
+}
+
+func realIPString(r *http.Request) string {
+	if ip := r.Header.Get(HeaderXForwardedFor); ip != "" {
+		return strings.Split(ip, ", ")[0]
+	}
+	if ip := r.Header.Get(HeaderXRealIP); ip != "" {
+		return ip
+	}
+	ip, _, _ := net.SplitHostPort(r.RemoteAddr)
+	return ip
+}
+
+func (a *nginxAccess) handle(next handler) handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if a.allow {
+			if !a.match(r) {
+				http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+				return
+			}
+		} else {
+			if a.match(r) {
+				http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }

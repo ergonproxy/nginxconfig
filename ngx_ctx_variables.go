@@ -166,6 +166,9 @@ const (
 	vUpstreamTrailer         = "$upstream_trailer"
 	vURI                     = "$uri"
 )
+const (
+	vRequestMatchKind = "request_match_kind"
+)
 
 // extra ctx keys
 type (

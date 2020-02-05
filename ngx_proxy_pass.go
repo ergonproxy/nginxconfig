@@ -1,10 +1,13 @@
 package main
 
 import (
+	"context"
 	"errors"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strings"
 	"sync"
 )
 
@@ -69,10 +72,49 @@ func (o *proxyOption) loadKey(r *rule) {
 				o.bind.off.store(true)
 			}
 		}
+	case "proxy_pass":
+		o.pass.uri.store(r.args[0])
 	}
 }
 
-func (p *proxy) init(location *rule, transport http.RoundTripper, eval func(string) string) {
+var baseTransport = &transport{}
+
+type transport struct {
+	transport http.Transport
+	once      sync.Once
+}
+
+func (t transport) RoundTrip(r *http.Request) (*http.Response, error) {
+	if strings.HasPrefix(r.URL.Host, "unix:") {
+		return t.getTransport().RoundTrip(r)
+	}
+	return http.DefaultTransport.RoundTrip(r)
+}
+
+func (t *transport) getTransport() *http.Transport {
+	t.once.Do(t.init)
+	return &t.transport
+}
+
+func (t *transport) init() {
+	t.transport.DialContext = t.dialCtx
+	t.transport.DialTLS = t.dialTLS
+}
+
+func (t *transport) dialCtx(ctx context.Context, network, address string) (net.Conn, error) {
+	var d net.Dialer
+	h, _, err := net.SplitHostPort(address)
+	if err != nil {
+		return nil, err
+	}
+	return d.DialContext(ctx, "unix", h[5:])
+}
+
+func (t *transport) dialTLS(network, address string) (net.Conn, error) {
+	return nil, errors.New("vince: tls over unix socket is not supported")
+}
+
+func (p *proxy) init(location *rule, transport http.RoundTripper) {
 	p.opts = proxyOption{}
 	p.opts.load(location)
 	p.rev = new(httputil.ReverseProxy)
@@ -85,9 +127,33 @@ func (p *proxy) director(r *http.Request) {
 	ctx := r.Context()
 	v := ctx.Value(variables{}).(*sync.Map)
 	target := eval(v, p.opts.pass.uri.value)
-	u, _ := url.Parse(target)
+	u, _ := parseProxyURL(target)
 	p.origURL = r.URL
+	if k, ok := v.Load(vRequestMatchKind); ok {
+		m := k.(*match)
+		switch m.kind {
+		case matchPrefix:
+			if u.Path == "/" && r.URL.Path != "/" {
+				p := strings.TrimPrefix(r.URL.Path, m.rule.args[0])
+				u.Path += strings.TrimPrefix(p, "/")
+			}
+		}
+	}
 	r.URL = u
+}
+
+func parseProxyURL(s string) (*url.URL, error) {
+	u, err := url.Parse(s)
+	if err != nil {
+		return nil, err
+	}
+	if u.Host != "unix:" {
+		return u, nil
+	}
+	p := strings.Split(u.Path, ":")
+	u.Host += p[0]
+	u.Path = p[1]
+	return u, nil
 }
 func (p *proxy) modifyResponse(w *http.Response) error {
 	//proxy_redirect
