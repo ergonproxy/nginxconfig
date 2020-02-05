@@ -696,4 +696,5 @@ func (c *httpCoreConfig) load(r *rule) error {
 		}
 		c.client.body.bufferSize.store(int64(v))
 	}
+	return nil
 }

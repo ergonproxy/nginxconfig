@@ -452,58 +452,73 @@ func (ls *locationMatch) load(srv *rule) {
 	}
 }
 
-func vinceHandler(ctx context.Context, servers []*rule) http.Handler {
-	srvCtx := ctx.Value(serverCtxKey{}).(*serverCtx)
-	reg := make(map[*regexp.Regexp]*rule)
-	exact := make(map[string][]*rule)
-	wild := make(map[string]*rule)
+type handlerMatch struct {
+	regExp        map[*regexp.Regexp]*rule
+	exact         map[string][]*rule
+	wild          map[string]*rule
+	defaultServer *rule
+}
+
+func (h *handlerMatch) init(servers []*rule, defaultServer *rule) {
+	h.defaultServer = defaultServer
+	h.regExp = make(map[*regexp.Regexp]*rule)
+	h.exact = make(map[string][]*rule)
+	h.wild = make(map[string]*rule)
 	for _, srv := range servers {
 		for _, ch := range srv.children {
 			if ch.name == "server_name" {
 				for _, a := range ch.args {
 					if a[0] == '~' {
 						re := regexp.MustCompile(a[1:])
-						reg[re] = srv
+						h.regExp[re] = srv
 						continue
 					}
 					if isWildCard(a) {
-						wild[a] = srv
+						h.wild[a] = srv
 						continue
 					}
-					if v, ok := exact[a]; ok {
-						exact[a] = append(v, srv)
+					if v, ok := h.exact[a]; ok {
+						h.exact[a] = append(v, srv)
 					} else {
-						exact[a] = []*rule{srv}
+						h.exact[a] = []*rule{srv}
 					}
 				}
 				break
 			}
 		}
 	}
-	find := func(name string) *rule {
-		if r, ok := exact[name]; ok {
-			return r[0]
-		}
-		if len(wild) > 0 {
-			var match string
-			for w := range wild {
-				if matchWildCard(name, w) {
-					if w > match {
-						match = w
-					}
+}
+
+func (h *handlerMatch) find(name string) *rule {
+	if r, ok := h.exact[name]; ok {
+		return r[0]
+	}
+	if len(h.wild) > 0 {
+		var match string
+		for w := range h.wild {
+			if matchWildCard(name, w) {
+				if w > match {
+					match = w
 				}
 			}
-			if match != "" {
-				return wild[match]
-			}
 		}
-		for re, r := range reg {
-			if re.MatchString(name) {
-				return r
-			}
+		if match != "" {
+			return h.wild[match]
 		}
-		return srvCtx.defaultServer[srvCtx.active.addrPort]
 	}
+	for re, r := range h.regExp {
+		if re.MatchString(name) {
+			return r
+		}
+	}
+	return h.defaultServer
+}
+
+func vinceHandler(ctx context.Context, servers []*rule) http.Handler {
+	srvCtx := ctx.Value(serverCtxKey{}).(*serverCtx)
+	var hm handlerMatch
+	hm.init(servers, srvCtx.defaultServer[srvCtx.active.addrPort])
+
 	location := new(sync.Map)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -513,7 +528,7 @@ func vinceHandler(ctx context.Context, servers []*rule) http.Handler {
 		if len(servers) == 1 {
 			srv = servers[0]
 		} else {
-			srv = find(r.Host)
+			srv = hm.find(r.Host)
 		}
 		if srv == nil {
 			srv = servers[0]

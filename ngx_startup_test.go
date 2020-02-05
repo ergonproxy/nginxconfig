@@ -18,3 +18,7 @@ func TestOveride(t *testing.T) {
 		t.Errorf("expected %q got %q", "first", got[3].name)
 	}
 }
+
+func TesVinceHandler(t *testing.T) {
+
+}
