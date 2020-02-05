@@ -74,6 +74,15 @@ func (o *proxyOption) loadKey(r *rule) {
 		}
 	case "proxy_pass":
 		o.pass.uri.store(r.args[0])
+	case "proxy_pass_header":
+		o.pass.header.store(r.args[0])
+	case "proxy_pass_request_body":
+		switch r.args[0] {
+		case "on":
+			o.pass.body.store(true)
+		case "off":
+			o.pass.body.store(false)
+		}
 	}
 }
 
@@ -140,6 +149,9 @@ func (p *proxy) director(r *http.Request) {
 		}
 	}
 	r.URL = u
+	if p.opts.pass.body.set && !p.opts.pass.body.value {
+		r.Body = nil
+	}
 }
 
 func parseProxyURL(s string) (*url.URL, error) {

@@ -118,7 +118,7 @@ func (ss *sslOptions) init() {
 	ss.ecdheCUrve.store("auto")
 	ss.preferServerCiphers.store(false)
 	ss.sessionCache.store("none")
-	ss.protocols.store([]string{"TLSv1", "TLSv1.1", "TLSv1.2"})
+	ss.protocols.store("TLSv1", "TLSv1.1", "TLSv1.2")
 	ss.sessionTickets.store(true)
 	ss.timeout.store(5 * time.Minute)
 	ss.stapling.store(false)
@@ -161,7 +161,7 @@ func (ss *sslOptions) load(r *rule) error {
 			for _, v := range standardCiphers(c) {
 				p = append(p, v.String())
 			}
-			ss.ciphers.store(p)
+			ss.ciphers.store(p...)
 		}
 	case "ssl_client_certificate":
 		if len(r.args) > 0 {
@@ -219,7 +219,7 @@ func (ss *sslOptions) load(r *rule) error {
 		}
 	case "ssl_protocols":
 		if len(r.args) > 0 {
-			ss.protocols.store(r.args)
+			ss.protocols.store(r.args...)
 		}
 	case "ssl_session_cache":
 		if len(r.args) > 0 {
@@ -523,8 +523,8 @@ type stringSliceValue struct {
 	value []string
 }
 
-func (s *stringSliceValue) store(v []string) {
-	s.value = v
+func (s *stringSliceValue) store(v ...string) {
+	s.value = append(s.value, v...)
 	s.set = true
 }
 
