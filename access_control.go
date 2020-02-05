@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net"
 	"net/http"
@@ -14,6 +15,15 @@ import (
 
 var accessControlPrefix = []byte("/access/")
 var accessControlModelPrefix = []byte("/access/model")
+
+type accessAllowed struct{}
+
+func passthrough(ctx context.Context) bool {
+	if v := ctx.Value(accessAllowed{}); v != nil {
+		return v.(bool)
+	}
+	return false
+}
 
 var _ persist.Adapter = (*accessControlAdapter)(nil)
 
@@ -115,7 +125,7 @@ func (a *nginxAccess) init(addr string, allow bool) {
 		a.match = func(_ *http.Request) bool { return true }
 	} else if addr == "unix:" {
 		a.match = func(r *http.Request) bool {
-			return false
+			return r.RemoteAddr == ""
 		}
 	} else if ip := net.ParseIP(addr); ip != nil {
 		a.match = a.matchIP(ip)
@@ -148,16 +158,21 @@ func realIPString(r *http.Request) string {
 
 func (a *nginxAccess) handle(next handler) handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if a.allow {
-			if !a.match(r) {
-				http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
-				return
+		ctx := r.Context()
+		if !passthrough(ctx) {
+			if a.allow {
+				if !a.match(r) {
+					http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+					return
+				}
+			} else {
+				if a.match(r) {
+					http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+					return
+				}
 			}
-		} else {
-			if a.match(r) {
-				http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
-				return
-			}
+			next.ServeHTTP(w, r.WithContext(context.WithValue(ctx, accessAllowed{}, true)))
+			return
 		}
 		next.ServeHTTP(w, r)
 	})
