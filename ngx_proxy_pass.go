@@ -38,6 +38,7 @@ type proxyOption struct {
 		header   stringSliceValue
 		body     boolValue
 		headers  boolValue
+		method   stringValue
 		redirect struct {
 			isDefault boolValue
 			off       boolValue
@@ -83,6 +84,8 @@ func (o *proxyOption) loadKey(r *rule) {
 		case "off":
 			o.pass.body.store(false)
 		}
+	case "proxy_method":
+		o.pass.method.store(r.args[0])
 	}
 }
 
@@ -93,7 +96,7 @@ type transport struct {
 	once      sync.Once
 }
 
-func (t transport) RoundTrip(r *http.Request) (*http.Response, error) {
+func (t *transport) RoundTrip(r *http.Request) (*http.Response, error) {
 	if strings.HasPrefix(r.URL.Host, "unix:") {
 		return t.getTransport().RoundTrip(r)
 	}
@@ -151,6 +154,9 @@ func (p *proxy) director(r *http.Request) {
 	r.URL = u
 	if p.opts.pass.body.set && !p.opts.pass.body.value {
 		r.Body = nil
+	}
+	if p.opts.pass.method.set {
+		r.Method = p.opts.pass.method.value
 	}
 }
 
