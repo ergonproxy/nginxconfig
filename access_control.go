@@ -125,11 +125,20 @@ func (a *nginxAccess) init(addr string, allow bool) {
 		a.match = func(_ *http.Request) bool { return true }
 	} else if addr == "unix:" {
 		a.match = func(r *http.Request) bool {
-			return r.RemoteAddr == ""
+			addr := r.Context().Value(http.LocalAddrContextKey).(net.Addr)
+			_, ok := addr.(*net.UnixAddr)
+			return ok
 		}
 	} else if ip := net.ParseIP(addr); ip != nil {
 		a.match = a.matchIP(ip)
 	}
+}
+
+func (a *nginxAccess) check(r *http.Request) bool {
+	if a.allow {
+		return a.match(r)
+	}
+	return !a.match(r)
 }
 
 func (a *nginxAccess) matchIP(ip net.IP) func(r *http.Request) bool {
@@ -160,16 +169,9 @@ func (a *nginxAccess) handle(next handler) handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		if !passthrough(ctx) {
-			if a.allow {
-				if !a.match(r) {
-					http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
-					return
-				}
-			} else {
-				if a.match(r) {
-					http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
-					return
-				}
+			if !a.check(r) {
+				http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+				return
 			}
 			next.ServeHTTP(w, r.WithContext(context.WithValue(ctx, accessAllowed{}, true)))
 			return

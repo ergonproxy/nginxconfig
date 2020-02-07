@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"net/url"
 	"testing"
+	"time"
 )
 
 func TestPassUnix(t *testing.T) {
@@ -20,4 +22,10 @@ func TestPassUnix(t *testing.T) {
 	}
 	t.Errorf("%#v", ux)
 
+}
+
+func TestDuration(t *testing.T) {
+	t.Skip()
+	b, _ := json.Marshal(time.Second)
+	t.Error(string(b))
 }

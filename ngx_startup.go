@@ -523,7 +523,6 @@ func vinceHandler(ctx context.Context, servers []*rule) http.Handler {
 
 	location := new(sync.Map)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Println("[main]=> ", r.URL.Path)
 		ctx := r.Context()
 		variable := ctx.Value(variables{}).(*sync.Map)
 		setRequestVariables(variable, r)
