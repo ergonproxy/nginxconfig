@@ -55,6 +55,11 @@ http {
 		runHTTP(http.MethodGet, host+"/inet/deny_all", nil, checkCode(http.StatusForbidden)),
 		runHTTP(http.MethodGet, host+"/inet/deny_unix", nil, checkCode(http.StatusNotFound)),
 
+		runHTTP(http.MethodGet, host+"/inet6/allow_all", nil, checkCode(http.StatusNotFound)),
+		runHTTP(http.MethodGet, host+"/inet6/allow_unix", nil, checkCode(http.StatusForbidden)),
+		runHTTP(http.MethodGet, host+"/inet6/deny_all", nil, checkCode(http.StatusForbidden)),
+		runHTTP(http.MethodGet, host+"/inet6/deny_unix", nil, checkCode(http.StatusNotFound)),
+
 		runHTTP(http.MethodGet, host+"/unix/allow_all", nil, checkCode(http.StatusNotFound)),
 		runHTTP(http.MethodGet, host+"/unix/allow_unix", nil, checkCode(http.StatusNotFound)),
 		runHTTP(http.MethodGet, host+"/unix/deny_all", nil, checkCode(http.StatusForbidden)),
