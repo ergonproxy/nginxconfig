@@ -21,4 +21,5 @@ require (
 	github.com/urfave/cli/v2 v2.1.1
 	go.uber.org/atomic v1.5.1
 	golang.org/x/crypto v0.0.0-20191227163750-53104e6ec876
+	gopkg.in/src-d/go-git.v4 v4.13.1
 )

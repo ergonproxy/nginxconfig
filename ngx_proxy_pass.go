@@ -89,31 +89,31 @@ func (o *proxyOption) loadKey(r *rule) {
 	}
 }
 
-var baseTransport = &transport{}
+var baseTransport = &unixTransport{}
 
-type transport struct {
+type unixTransport struct {
 	transport http.Transport
 	once      sync.Once
 }
 
-func (t *transport) RoundTrip(r *http.Request) (*http.Response, error) {
+func (t *unixTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	if strings.HasPrefix(r.URL.Host, "unix:") {
 		return t.getTransport().RoundTrip(r)
 	}
 	return http.DefaultTransport.RoundTrip(r)
 }
 
-func (t *transport) getTransport() *http.Transport {
+func (t *unixTransport) getTransport() *http.Transport {
 	t.once.Do(t.init)
 	return &t.transport
 }
 
-func (t *transport) init() {
+func (t *unixTransport) init() {
 	t.transport.DialContext = t.dialCtx
 	t.transport.DialTLS = t.dialTLS
 }
 
-func (t *transport) dialCtx(ctx context.Context, network, address string) (net.Conn, error) {
+func (t *unixTransport) dialCtx(ctx context.Context, network, address string) (net.Conn, error) {
 	var d net.Dialer
 	h, _, err := net.SplitHostPort(address)
 	if err != nil {
@@ -122,7 +122,7 @@ func (t *transport) dialCtx(ctx context.Context, network, address string) (net.C
 	return d.DialContext(ctx, "unix", h[5:])
 }
 
-func (t *transport) dialTLS(network, address string) (net.Conn, error) {
+func (t *unixTransport) dialTLS(network, address string) (net.Conn, error) {
 	return nil, errors.New("vince: tls over unix socket is not supported")
 }
 
