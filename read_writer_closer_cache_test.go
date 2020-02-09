@@ -47,6 +47,7 @@ func BenchmarkCache_Rand(b *testing.B) {
 	var hit, miss int
 	var ok bool
 	b.ResetTimer()
+	b.ReportAllocs()
 
 	for i := 0; i < 2*b.N; i++ {
 		if i%2 == 0 {
