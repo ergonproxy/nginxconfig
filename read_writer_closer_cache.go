@@ -12,7 +12,7 @@ import (
 )
 
 type readWriterCloserCache struct {
-	opts   fileLogCacheOption
+	opts   readWriterCloserCacheOption
 	list   *list.List
 	mu     sync.Mutex
 	uses   *sync.Map
@@ -20,7 +20,7 @@ type readWriterCloserCache struct {
 	opener func(string) (io.ReadWriteCloser, error)
 }
 
-type fileLogCacheOption struct {
+type readWriterCloserCacheOption struct {
 	on       boolValue
 	max      intValue
 	inactive durationValue
@@ -28,7 +28,7 @@ type fileLogCacheOption struct {
 	min      intValue
 }
 
-func (o *fileLogCacheOption) defaults() {
+func (o *readWriterCloserCacheOption) defaults() {
 	o.on.store(false)
 	o.max.store(100)
 	o.inactive.store(10 * time.Second)
@@ -92,12 +92,13 @@ func (f *readWriterCloserCache) Delete(keys ...string) {
 	}
 }
 
-func (f *readWriterCloserCache) init(ctx context.Context, opts fileLogCacheOption) bool {
+func (f *readWriterCloserCache) init(ctx context.Context, opts readWriterCloserCacheOption) bool {
 	if !opts.on.value {
 		return false
 	}
 	f.list = new(list.List)
 	f.uses = new(sync.Map)
+	f.opts = opts
 	f.hash = make(map[string]*list.Element)
 	go f.manageKeys(ctx)
 	f.opener = func(path string) (io.ReadWriteCloser, error) {
@@ -111,16 +112,17 @@ type fileObject struct {
 	file io.ReadWriteCloser
 }
 
-func (f *readWriterCloserCache) Get(key string) io.ReadWriteCloser {
+func (f *readWriterCloserCache) Get(key string) (io.ReadWriteCloser, bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if node, ok := f.hash[key]; ok {
-		v := node.Value.(*list.Element).Value.(*fileObject)
-		f.list.MoveToFront(node)
-		f.hit(key)
-		return v.file
+	node, ok := f.hash[key]
+	if !ok {
+		return nil, ok
 	}
-	return nil
+	v := node.Value.(*list.Element).Value.(*fileObject)
+	f.list.MoveToFront(node)
+	f.hit(key)
+	return v.file, true
 }
 
 func (f *readWriterCloserCache) hit(path string) {
