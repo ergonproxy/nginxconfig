@@ -4,19 +4,20 @@ import (
 	"container/list"
 	"context"
 	"errors"
-	"net/http"
+	"io"
 	"os"
 	"strings"
 	"sync"
 	"time"
 )
 
-type fileCache struct {
-	opts fileLogCacheOption
-	list *list.List
-	mu   sync.Mutex
-	uses *sync.Map
-	hash map[string]*list.Element
+type readWriterCloserCache struct {
+	opts   fileLogCacheOption
+	list   *list.List
+	mu     sync.Mutex
+	uses   *sync.Map
+	hash   map[string]*list.Element
+	opener func(string) (io.ReadWriteCloser, error)
 }
 
 type fileLogCacheOption struct {
@@ -35,7 +36,7 @@ func (o *fileLogCacheOption) defaults() {
 	o.min.store(1)
 }
 
-func (f *fileCache) deleteUnsafe(node *list.Element) {
+func (f *readWriterCloserCache) deleteUnsafe(node *list.Element) {
 	if node == nil {
 		return
 	}
@@ -46,7 +47,7 @@ func (f *fileCache) deleteUnsafe(node *list.Element) {
 	f.list.Remove(node)
 }
 
-func (f *fileCache) manageKeys(ctx context.Context) {
+func (f *readWriterCloserCache) manageKeys(ctx context.Context) {
 	valid := time.NewTicker(f.opts.valid.value)
 	defer valid.Stop()
 	inactive := time.NewTicker(f.opts.inactive.value)
@@ -81,7 +82,7 @@ func (f *fileCache) manageKeys(ctx context.Context) {
 	}
 }
 
-func (f *fileCache) Delete(keys ...string) {
+func (f *readWriterCloserCache) Delete(keys ...string) {
 	if len(keys) > 0 {
 		f.mu.Lock()
 		for _, key := range keys {
@@ -91,7 +92,7 @@ func (f *fileCache) Delete(keys ...string) {
 	}
 }
 
-func (f *fileCache) init(ctx context.Context, opts fileLogCacheOption) bool {
+func (f *readWriterCloserCache) init(ctx context.Context, opts fileLogCacheOption) bool {
 	if !opts.on.value {
 		return false
 	}
@@ -99,15 +100,18 @@ func (f *fileCache) init(ctx context.Context, opts fileLogCacheOption) bool {
 	f.uses = new(sync.Map)
 	f.hash = make(map[string]*list.Element)
 	go f.manageKeys(ctx)
+	f.opener = func(path string) (io.ReadWriteCloser, error) {
+		return os.Open(path)
+	}
 	return true
 }
 
 type fileObject struct {
 	path string
-	file *os.File
+	file io.ReadWriteCloser
 }
 
-func (f *fileCache) Get(key string) *os.File {
+func (f *readWriterCloserCache) Get(key string) io.ReadWriteCloser {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if node, ok := f.hash[key]; ok {
@@ -119,7 +123,7 @@ func (f *fileCache) Get(key string) *os.File {
 	return nil
 }
 
-func (f *fileCache) hit(path string) {
+func (f *readWriterCloserCache) hit(path string) {
 	if v, ok := f.uses.Load(path); ok {
 		f.uses.Store(path, v.(int64)+1)
 	} else {
@@ -127,8 +131,8 @@ func (f *fileCache) hit(path string) {
 	}
 }
 
-func (f *fileCache) Put(path string) (http.File, error) {
-	file, err := os.Open(path)
+func (f *readWriterCloserCache) Put(path string) (io.WriteCloser, error) {
+	file, err := f.opener(path)
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +156,7 @@ func (f *fileCache) Put(path string) (http.File, error) {
 	return file, nil
 }
 
-func (f *fileCache) Close() error {
+func (f *readWriterCloserCache) Close() error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	var errs []string
