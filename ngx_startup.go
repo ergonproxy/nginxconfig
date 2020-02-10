@@ -149,14 +149,8 @@ func startEverything(mainCtx context.Context, config *vinceConfiguration, ready 
 	}
 	d := &Stmt{Directive: "main"}
 	d.Blocks = p.Config[0].Parsed
-	core := ruleFromStmt(d, nil)
-	srvCtx := newSrvCtx()
-	srvCtx.tpl = templates.HTML()
-	srvCtx.core = core
-	var fo readWriterCloserCacheOption
-	fo.defaults()
-	srvCtx.fileCache = new(readWriterCloserCache)
-	srvCtx.fileCache.initFile(ctx, fo)
+	var srvCtx serverCtx
+	srvCtx.init(ctx, d)
 
 	defer func() {
 		// make sure all listeners are closed before exiting
@@ -165,7 +159,7 @@ func startEverything(mainCtx context.Context, config *vinceConfiguration, ready 
 		}
 	}()
 
-	if err := process(ctx, srvCtx, config); err != nil {
+	if err := process(ctx, &srvCtx, config); err != nil {
 		return err
 	}
 	if config.management.enabled {
@@ -180,7 +174,7 @@ func startEverything(mainCtx context.Context, config *vinceConfiguration, ready 
 			}
 			srvCtx.ls2[l.Addr().String()] = l
 			m := new(management)
-			m.init(srvCtx)
+			m.init(&srvCtx)
 			srv := &http.Server{Handler: m}
 			srvCtx.ls3[l.Addr().String()] = srv
 			fmt.Println("vince: staring management server at ", l.Addr().String())
@@ -236,7 +230,7 @@ type serverCtx struct {
 }
 
 func (s *serverCtx) with(active listenOpts) *serverCtx {
-	return &serverCtx{core: s.core, ls1: s.ls1, ls2: s.ls2, ls3: s.ls3, active: &active}
+	return &serverCtx{core: s.core, ls1: s.ls1, ls2: s.ls2, ls3: s.ls3, active: &active, fileCache: s.fileCache}
 }
 
 func (s *serverCtx) handle(r *rule) func(handler) handler {
@@ -295,13 +289,19 @@ func nextHandler(next handler) handler {
 	return next
 }
 
-func newSrvCtx() *serverCtx {
-	return &serverCtx{
-		address: make(map[string]listenOpts),
-		ls1:     make(map[string][]*rule),
-		ls2:     make(map[string]net.Listener),
-		ls3:     make(map[string]*http.Server),
-	}
+func (s *serverCtx) init(ctx context.Context, stmt *Stmt) {
+	s.address = make(map[string]listenOpts)
+	s.ls1 = make(map[string][]*rule)
+	s.ls2 = make(map[string]net.Listener)
+	s.ls3 = make(map[string]*http.Server)
+
+	core := ruleFromStmt(stmt, nil)
+	s.tpl = templates.HTML()
+	s.core = core
+	var fo readWriterCloserCacheOption
+	fo.defaults()
+	s.fileCache = new(readWriterCloserCache)
+	s.fileCache.initFile(ctx, fo)
 }
 
 func createHTTPServer(ctx context.Context, servers []*rule, opts listenOpts) (*http.Server, error) {
