@@ -36,9 +36,8 @@ modern tools for building and managing high performance , highly available servi
 
 var configFlag = cli.StringFlag{
 	Name:        "c",
-	Usage:       "Configuration file",
+	Usage:       "Configuration directory tree",
 	EnvVars:     []string{"VINCE_CONFIG"},
-	TakesFile:   true,
 	DefaultText: strings.Join(defaultConfigFiles(), " or "),
 }
 
@@ -47,5 +46,5 @@ func defaultWorkDirectories() []string {
 }
 
 func defaultConfigFiles() []string {
-	return []string{"/usr/local/vince/conf/vince.conf", " /etc/vince/vince.conf", "/usr/local/etc/vince/vince.conf"}
+	return []string{"/usr/local/vince/conf/vince.conf", " /etc/vince/conf/vince.conf", "/usr/local/etc/vince/conf/vince.conf"}
 }

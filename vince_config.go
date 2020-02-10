@@ -120,13 +120,11 @@ func getConfig(ctx *cli.Context) (*vinceConfiguration, error) {
 		if err != nil {
 			return nil, err
 		}
-		if stat.IsDir() {
-			c.dir = file
-			c.confFile = filepath.Join(file, "vince.conf")
-		} else {
-			c.confFile = file
-			c.dir = filepath.Dir(file)
+		if !stat.IsDir() {
+			return nil, errors.New("vince: -c flag should be a valid directory")
 		}
+		c.dir = file
+		c.confFile = filepath.Join(file, "conf", "vince.conf")
 		return &c, nil
 	}
 	for _, file := range defaultConfigFiles() {
