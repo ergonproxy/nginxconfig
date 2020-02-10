@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -15,6 +16,25 @@ type (
 	accessLogFormat   struct{}
 	ngxLoggerKey      struct{}
 )
+
+var levels = map[string]int{
+	"debug":  6,
+	"info":   5,
+	"notice": 4,
+	"warn":   3,
+	"error":  2,
+	"crit":   1,
+	"alert":  0,
+}
+
+var levelMu sync.Mutex
+
+// returns true if level a is within level b
+func withinLevel(a, b string) bool {
+	levelMu.Lock()
+	defer levelMu.Unlock()
+	return levels[a] < levels[b]
+}
 
 const defaultLogFormat = `$remote_addr - $remote_user [$time_local] "$request" $status $body_bytes_sent "$http_referer" "$http_user_agent"`
 
@@ -49,6 +69,23 @@ func (l *logFormat) load(r *rule) {
 
 type ngxLogger interface {
 	Println(file string, level string, message []byte)
+}
+
+type cacheLogger struct {
+	cache *readWriterCloserCache
+}
+
+func (c *cacheLogger) Print(file string, level string, message []byte) error {
+	if f, ok := c.cache.Get(file); ok {
+		f.Write(message)
+	} else {
+		f, err := c.cache.Put(file)
+		if err != nil {
+			return err
+		}
+		f.Write(message)
+	}
+	return nil
 }
 
 func errorLog(ctx context.Context, err error) {
@@ -88,4 +125,37 @@ func accessLog(next echo.HandlerFunc) echo.HandlerFunc {
 		}
 		return nil
 	}
+}
+
+func logMiddleware(next handler) handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		dest := ctx.Value(accessLogPathKey{})
+		if dest == nil {
+			next.ServeHTTP(w, r)
+			return
+		}
+		destPath := dest.(string)
+		if destPath == "" || destPath == "/dev/null" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		level := "info"
+		if v := ctx.Value(accessLogLevelKey{}); v != nil {
+			level = v.(string)
+		}
+		if v := ctx.Value(ngxLoggerKey{}); v != nil {
+			ngx := v.(ngxLogger)
+			start := time.Now()
+			next.ServeHTTP(w, r)
+			duration := time.Since(start)
+			m := ctx.Value(variables{}).(*sync.Map)
+			m.Store(vRequestTime, duration.Milliseconds())
+			format := defaultLogFormat
+			if f := ctx.Value(accessLogFormat{}); f != nil {
+				format = f.(string)
+			}
+			ngx.Println(destPath, level, resolveVariables(m, []byte(format)))
+		}
+	})
 }

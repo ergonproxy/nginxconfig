@@ -29,7 +29,7 @@ type readWriterCloserCacheOption struct {
 }
 
 func (o *readWriterCloserCacheOption) defaults() {
-	o.on.store(false)
+	o.on.store(true)
 	o.max.store(100)
 	o.inactive.store(10 * time.Second)
 	o.valid.store(60 * time.Second)
@@ -101,6 +101,16 @@ func (f *readWriterCloserCache) init(ctx context.Context, opts readWriterCloserC
 	f.opts = opts
 	f.hash = make(map[string]*list.Element)
 	go f.manageKeys(ctx)
+	f.opener = func(path string) (io.ReadWriteCloser, error) {
+		return os.Open(path)
+	}
+	return true
+}
+
+func (f *readWriterCloserCache) initFile(ctx context.Context, opts readWriterCloserCacheOption) bool {
+	if ok := f.init(ctx, opts); !ok {
+		return ok
+	}
 	f.opener = func(path string) (io.ReadWriteCloser, error) {
 		return os.Open(path)
 	}

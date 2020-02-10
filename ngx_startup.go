@@ -153,6 +153,10 @@ func startEverything(mainCtx context.Context, config *vinceConfiguration, ready 
 	srvCtx := newSrvCtx()
 	srvCtx.tpl = templates.HTML()
 	srvCtx.core = core
+	var fo readWriterCloserCacheOption
+	fo.defaults()
+	srvCtx.fileCache = new(readWriterCloserCache)
+	srvCtx.fileCache.initFile(ctx, fo)
 
 	defer func() {
 		// make sure all listeners are closed before exiting
@@ -227,6 +231,7 @@ type serverCtx struct {
 	ls1           map[string][]*rule
 	ls2           map[string]net.Listener
 	ls3           map[string]*http.Server
+	fileCache     *readWriterCloserCache
 	active        *listenOpts
 }
 
