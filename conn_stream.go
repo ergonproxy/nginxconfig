@@ -3,8 +3,6 @@ package main
 import (
 	"context"
 	"net"
-	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/ergongate/vince/buffers"
@@ -22,38 +20,12 @@ type proxyConnOpts struct {
 	scope         tally.Scope
 }
 
-type tcpAnalytics struct {
-	local struct {
-		bytesRead    tally.Histogram
-		bytesWritten tally.Histogram
-	}
-	upstream struct {
-		bytesWritten tally.Histogram
-		bytesRead    tally.Histogram
-	}
-	duration tally.Histogram
-}
-
-func (t *tcpAnalytics) init(scope tally.Scope, local, remote net.Conn, m *connManager) {
-	s := scope.Tagged(map[string]string{
-		"local":    strconv.FormatInt(m.getID(local), 10),
-		"upstream": strconv.FormatInt(m.getID(remote), 10),
-	})
-	t.local.bytesRead = s.Histogram("stream_local_bytes_read", histogramBucket())
-	t.local.bytesWritten = s.Histogram("stream_local_bytes_written", histogramBucket())
-	t.upstream.bytesRead = s.Histogram("stream_upstream_bytes_read", histogramBucket())
-	t.upstream.bytesWritten = s.Histogram("stream_upstream_bytes_written", histogramBucket())
-	t.duration = s.Histogram("stream_total_duration", tally.MustMakeLinearDurationBuckets(0, time.Millisecond, 60))
-}
-
 func histogramBucket() tally.Buckets {
 	return tally.DefaultBuckets
 }
 
-func proxyConn(ctx context.Context, opts proxyConnOpts, local, remote net.Conn, m *connManager) error {
-	var ts tcpAnalytics
-	ts.init(opts.scope, local, remote, m)
-	watch := ts.duration.Start()
+func proxyConn(ctx context.Context, ts *metricsCollector, opts proxyConnOpts, local, remote net.Conn) error {
+	watch := ts.tcp.duration.Start()
 	defer func() {
 		watch.Stop()
 	}()
@@ -81,10 +53,9 @@ func proxyConn(ctx context.Context, opts proxyConnOpts, local, remote net.Conn, 
 				return
 			}
 			if firstLocal.Load() {
-				m.manageConnState(local, http.StateActive)
 				firstLocal.Store(false)
 			}
-			ts.local.bytesRead.RecordValue(float64(n))
+			ts.tcp.local.bytesRead.RecordValue(float64(n))
 
 			if opts.remote.writeTimeout != 0 {
 				remote.SetWriteDeadline(time.Now().Add(opts.remote.writeTimeout))
@@ -94,10 +65,9 @@ func proxyConn(ctx context.Context, opts proxyConnOpts, local, remote net.Conn, 
 				return
 			}
 			if firstRemote.Load() {
-				m.manageConnState(remote, http.StateActive)
 				firstRemote.Store(false)
 			}
-			ts.upstream.bytesWritten.RecordValue(float64(n))
+			ts.tcp.upstream.bytesWritten.RecordValue(float64(n))
 		}
 	}()
 	buf := buffers.GetSlice()
@@ -120,10 +90,9 @@ func proxyConn(ctx context.Context, opts proxyConnOpts, local, remote net.Conn, 
 			return err
 		}
 		if firstRemote.Load() {
-			m.manageConnState(remote, http.StateActive)
 			firstRemote.Store(false)
 		}
-		ts.local.bytesWritten.RecordValue(float64(n))
+		ts.tcp.local.bytesWritten.RecordValue(float64(n))
 
 		if opts.local.writeTimeout != 0 {
 			local.SetWriteDeadline(time.Now().Add(opts.local.writeTimeout))
@@ -134,10 +103,9 @@ func proxyConn(ctx context.Context, opts proxyConnOpts, local, remote net.Conn, 
 			return err
 		}
 		if firstLocal.Load() {
-			m.manageConnState(local, http.StateActive)
 			firstLocal.Store(false)
 		}
-		ts.local.bytesWritten.RecordValue(float64(n))
+		ts.tcp.local.bytesWritten.RecordValue(float64(n))
 	}
 }
 
@@ -160,24 +128,22 @@ type stream interface {
 	config() proxyConnOpts
 }
 
-func streamListener(ctx context.Context, ls net.Listener, srv stream, m *connManager) error {
+func streamListener(ctx context.Context, mx *metricsCollector, ls net.Listener, srv stream) error {
 	for {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		baseCtx := m.baseCtx(ctx, ls)
 
 		l, err := ls.Accept()
 		if err != nil {
 			return err
 		}
-		ctx = m.connContext(baseCtx, l)
-		m.manageConnState(l, http.StateNew)
-		go streamConn(ctx, l, srv, m)
+		mx.tcp.conn.accepted.Inc(1)
+		go streamConn(ctx, mx, l, srv)
 	}
 }
 
-func streamConn(ctx context.Context, conn net.Conn, srv stream, m *connManager) error {
+func streamConn(ctx context.Context, mx *metricsCollector, conn net.Conn, srv stream) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -185,13 +151,9 @@ func streamConn(ctx context.Context, conn net.Conn, srv stream, m *connManager) 
 	if err != nil {
 		return err
 	}
-	m.manageConnState(remote, http.StateNew)
+	defer remote.Close()
 	opts := srv.config()
-	defer func() {
-		m.manageConnState(conn, http.StateClosed)
-		m.manageConnState(remote, http.StateClosed)
-	}()
-	return proxyConn(ctx, opts, conn, remote, m)
+	return proxyConn(ctx, mx, opts, conn, remote)
 }
 
 func show(ctx context.Context, err error) {
@@ -202,19 +164,18 @@ func show(ctx context.Context, err error) {
 
 type streamServer struct {
 	stream stream
-	m      *connManager
 	ctx    context.Context
+	mx     *metricsCollector
 	cancel func()
 }
 
 func (s *streamServer) init(ctx context.Context, sm stream, m *connManager) {
 	s.ctx, s.cancel = context.WithCancel(ctx)
-	s.m = m
 	s.stream = sm
 }
 
 func (s *streamServer) Serve(ls net.Listener) error {
-	return streamListener(s.ctx, ls, s.stream, s.m)
+	return streamListener(s.ctx, s.mx, ls, s.stream)
 }
 
 func (s *streamServer) Close() error {
