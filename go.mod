@@ -9,6 +9,10 @@ require (
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/hashicorp/raft v1.1.2
 	github.com/labstack/echo/v4 v4.1.13
+	github.com/m3db/prometheus_client_golang v0.8.1 // indirect
+	github.com/m3db/prometheus_client_model v0.1.0 // indirect
+	github.com/m3db/prometheus_common v0.1.0 // indirect
+	github.com/m3db/prometheus_procfs v0.8.1 // indirect
 	github.com/mikioh/tcp v0.0.0-20190314235350-803a9b46060c
 	github.com/mikioh/tcpinfo v0.0.0-20190314235526-30a79bb1804b
 	github.com/mikioh/tcpopt v0.0.0-20190314235656-172688c1accc // indirect

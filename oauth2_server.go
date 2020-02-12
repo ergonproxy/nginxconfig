@@ -153,7 +153,9 @@ const (
 
 var oauth2ClientPrefix = []byte("/client/")
 var oauth2UserPrefix = []byte("/user/")
-var oauth2GrantPrefix = []byte("/grant/")
+var oauth2GrantPrefix = []byte("/grant/token/")
+var oauth2GrantAccessPrefix = []byte("/grant/access_token/")
+var oauth2GrantRefreshPrefix = []byte("/grant/refresh_token/")
 var oauth2TokenPrefix = []byte("/token/")
 var oauth2CSRFTokenPrefix = []byte("/csrf/")
 
@@ -653,18 +655,18 @@ func (o *oauth2) saveGrant(c *oauth2Grant) error {
 		return err
 	}
 	if c.AccessToken != "" {
-		err = o.store.set(joinSlice(oauth2ClientPrefix, []byte(c.AccessToken)), b)
+		err = o.store.set(joinSlice(oauth2GrantAccessPrefix, []byte(c.AccessToken)), b)
 		if err != nil {
 			return err
 		}
 	}
 	if c.RefreshToken != "" {
-		err = o.store.set(joinSlice(oauth2ClientPrefix, []byte(c.RefreshToken)), b)
+		err = o.store.set(joinSlice(oauth2GrantRefreshPrefix, []byte(c.RefreshToken)), b)
 		if err != nil {
 			return err
 		}
 	}
-	return o.store.set(joinSlice(oauth2ClientPrefix, []byte(c.Code)), b)
+	return o.store.set(joinSlice(oauth2GrantPrefix, []byte(c.Code)), b)
 }
 
 func (o *oauth2) finalize(auth *oauth2Grant, ctx *oauth2Context) error {
@@ -731,7 +733,7 @@ func (o *oauth2) removeGrant(id string) error {
 	}
 	grant.DeletedAt = time.Now()
 	if grant.AccessToken != "" {
-		err := o.store.remove(joinSlice(oauth2GrantPrefix, []byte(grant.AccessToken)))
+		err := o.store.remove(joinSlice(oauth2GrantAccessPrefix, []byte(grant.AccessToken)))
 		if err != nil {
 			return err
 		}
@@ -741,7 +743,7 @@ func (o *oauth2) removeGrant(id string) error {
 		}
 	}
 	if grant.RefreshToken != "" {
-		err := o.store.remove(joinSlice(oauth2GrantPrefix, []byte(grant.RefreshToken)))
+		err := o.store.remove(joinSlice(oauth2GrantRefreshPrefix, []byte(grant.RefreshToken)))
 		if err != nil {
 			return err
 		}
@@ -866,7 +868,19 @@ func (o *oauth2) client(id string) (*oauth2Client, error) {
 }
 
 func (o *oauth2) grant(id string) (*oauth2Grant, error) {
-	b, err := o.store.get(joinSlice(oauth2GrantPrefix, []byte(id)))
+	return o.grantBy(oauth2GrantPrefix, id)
+}
+
+func (o *oauth2) grantByAccess(accessToken string) (*oauth2Grant, error) {
+	return o.grantBy(oauth2GrantRefreshPrefix, accessToken)
+}
+
+func (o *oauth2) grantByRefresh(refreshToken string) (*oauth2Grant, error) {
+	return o.grantBy(oauth2GrantRefreshPrefix, refreshToken)
+}
+
+func (o *oauth2) grantBy(prefix []byte, key string) (*oauth2Grant, error) {
+	b, err := o.store.get(joinSlice(prefix, []byte(key)))
 	if err != nil {
 		return nil, err
 	}
@@ -1189,4 +1203,60 @@ func (b *bearerAuth) init(r *http.Request) bool {
 	}
 	b.Code = authCode
 	return true
+}
+
+func (o *oauth2) info(w http.ResponseWriter, r *http.Request) error {
+	var ctx oauth2Context
+	ctx.init()
+	if err := r.ParseForm(); err != nil {
+		ctx.setErrState(oauth2ErrInvalidRequest, "", "")
+		ctx.internalErr = err
+		return ctx.commit(w)
+	}
+	var bearer bearerAuth
+	if !bearer.init(r) || bearer.Code == "" {
+		ctx.setErrState(oauth2ErrInvalidRequest, "", "")
+		return ctx.commit(w)
+	}
+	client, err := o.clientWithCode(bearer)
+	if err != nil {
+		ctx.setErrState(oauth2ErrUnauthorizedClient, "", "")
+		ctx.internalErr = err
+		return ctx.commit(w)
+	}
+	grant, err := o.grantByAccess(bearer.Code)
+	if err != nil {
+		ctx.setErrState(oauth2ErrInvalidGrant, "", "")
+		ctx.internalErr = err
+		return ctx.commit(w)
+	}
+	fromClient := false
+	for _, g := range client.Grants {
+		if g == grant.Code {
+			fromClient = true
+			break
+		}
+	}
+	if !fromClient {
+		ctx.setErrState(oauth2ErrInvalidGrant, "", "")
+		return ctx.commit(w)
+	}
+
+	if grant.expired() {
+		ctx.setErrState(oauth2ErrInvalidGrant, "", "")
+		return ctx.commit(w)
+	}
+	usr, err := o.user(grant.UserID)
+	if err != nil {
+		ctx.setErrState(oauth2ErrInvalidGrant, "", "")
+		ctx.internalErr = err
+		return ctx.commit(w)
+	}
+	switch grant.Scope {
+	case "email":
+		ctx.data["email"] = usr.Email
+	default:
+		ctx.setErrState(oauth2ErrInvalidGrant, "", "")
+	}
+	return ctx.commit(w)
 }

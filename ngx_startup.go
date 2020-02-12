@@ -95,18 +95,18 @@ func process(ctx context.Context, srvCtx *serverCtx, config *vinceConfiguration)
 
 	for _, v := range servers {
 		for _, ls := range findListener(v, config.defaultPort) {
-			if _, ok := srvCtx.address[ls.addrPort]; !ok {
-				srvCtx.address[ls.addrPort] = ls
+			if _, ok := srvCtx.http.address[ls.addrPort]; !ok {
+				srvCtx.http.address[ls.addrPort] = ls
 			}
-			if a, ok := srvCtx.ls1[ls.addrPort]; ok {
-				srvCtx.ls1[ls.addrPort] = append(a, v)
+			if a, ok := srvCtx.http.ls1[ls.addrPort]; ok {
+				srvCtx.http.ls1[ls.addrPort] = append(a, v)
 			} else {
-				srvCtx.ls1[ls.addrPort] = []*rule{v}
+				srvCtx.http.ls1[ls.addrPort] = []*rule{v}
 			}
 		}
 	}
-	for k := range srvCtx.ls1 {
-		opts := srvCtx.address[k]
+	for k := range srvCtx.http.ls1 {
+		opts := srvCtx.http.address[k]
 		var l net.Listener
 		var err error
 		if opts.ssl {
@@ -121,21 +121,21 @@ func process(ctx context.Context, srvCtx *serverCtx, config *vinceConfiguration)
 		if err != nil {
 			return err
 		}
-		srvCtx.ls2[opts.addrPort] = l
+		srvCtx.http.ls2[opts.addrPort] = l
 	}
-	for k, rules := range srvCtx.ls1 {
-		opts := srvCtx.address[k]
-		srv, err := createHTTPServer(context.WithValue(ctx, serverCtxKey{}, srvCtx.with(opts)), rules, opts)
+	for k, rules := range srvCtx.http.ls1 {
+		opts := srvCtx.http.address[k]
+		srv, err := createHTTPServer(ctx, srvCtx, rules, opts)
 		if err != nil {
 			return err
 		}
-		srvCtx.ls3[opts.addrPort] = srv
+		srvCtx.http.ls3[opts.addrPort] = srv
 	}
 
 	// we can start servers now
-	for opts, srv := range srvCtx.ls3 {
-		fmt.Printf("[vince] starting server on %q\n", srvCtx.ls2[opts].Addr().String())
-		go srv.Serve(srvCtx.ls2[opts])
+	for opts, srv := range srvCtx.http.ls3 {
+		fmt.Printf("[vince] starting server on %q\n", srvCtx.http.ls2[opts].Addr().String())
+		go srv.Serve(srvCtx.http.ls2[opts])
 	}
 	return nil
 }
@@ -153,10 +153,7 @@ func startEverything(mainCtx context.Context, config *vinceConfiguration, ready 
 	srvCtx.init(ctx, d)
 
 	defer func() {
-		// make sure all listeners are closed before exiting
-		for _, l := range srvCtx.ls2 {
-			l.Close() // TODO:(gernest) handle error
-		}
+		srvCtx.shutdown(context.Background())
 	}()
 
 	if err := process(ctx, &srvCtx, config); err != nil {
@@ -168,15 +165,15 @@ func startEverything(mainCtx context.Context, config *vinceConfiguration, ready 
 			// TODO log
 			fmt.Println("vince: failed to start management server ", err)
 		} else {
-			srvCtx.address[l.Addr().String()] = listenOpts{
+			srvCtx.http.address[l.Addr().String()] = listenOpts{
 				net:      l.Addr().Network(),
 				addrPort: l.Addr().String(),
 			}
-			srvCtx.ls2[l.Addr().String()] = l
+			srvCtx.http.ls2[l.Addr().String()] = l
 			m := new(management)
 			m.init(&srvCtx)
 			srv := &http.Server{Handler: m}
-			srvCtx.ls3[l.Addr().String()] = srv
+			srvCtx.http.ls3[l.Addr().String()] = srv
 			fmt.Println("vince: staring management server at ", l.Addr().String())
 			go srv.Serve(l)
 		}
@@ -218,19 +215,33 @@ func startEverything(mainCtx context.Context, config *vinceConfiguration, ready 
 }
 
 type serverCtx struct {
-	core          *rule
-	tpl           *template.Template
-	defaultServer map[string]*rule
-	address       map[string]listenOpts
-	ls1           map[string][]*rule
-	ls2           map[string]net.Listener
-	ls3           map[string]*http.Server
-	fileCache     *readWriterCloserCache
-	active        *listenOpts
+	core *rule
+	http struct {
+		tpl           *template.Template
+		defaultServer map[string]*rule
+		address       map[string]listenOpts
+		ls1           map[string][]*rule
+		ls2           map[string]net.Listener
+		ls3           map[string]*http.Server
+		cm            *connManager
+		active        *listenOpts
+	}
+	fileCache *readWriterCloserCache
+	metrics   *metricsCollector
 }
 
 func (s *serverCtx) with(active listenOpts) *serverCtx {
-	return &serverCtx{core: s.core, ls1: s.ls1, ls2: s.ls2, ls3: s.ls3, active: &active, fileCache: s.fileCache}
+	n := new(serverCtx)
+	n.core = s.core
+	n.http.tpl = s.http.tpl
+	n.http.ls1 = s.http.ls1
+	n.http.ls2 = s.http.ls2
+	n.http.ls3 = s.http.ls3
+	n.http.active = &active
+	n.fileCache = s.fileCache
+	n.metrics = s.metrics
+	n.http.cm = s.http.cm
+	return n
 }
 
 func (s *serverCtx) handle(r *rule) func(handler) handler {
@@ -266,10 +277,22 @@ func wrap(h handler, halt bool) func(handler) handler {
 
 func (s *serverCtx) shutdown(ctx context.Context) error {
 	var errs []string
-	for _, srv := range s.ls3 {
+	// 1 shut down all http servers
+	for _, srv := range s.http.ls3 {
 		if err := srv.Shutdown(ctx); err != nil {
 			errs = append(errs, err.Error())
 		}
+	}
+	// 2 close all listeners
+	for _, l := range s.http.ls2 {
+		if err := l.Close(); err != nil {
+			errs = append(errs, err.Error())
+		}
+	}
+
+	// 3 close all managed connections. This includes hijacked connections.
+	if err := s.http.cm.Close(); err != nil {
+		errs = append(errs, err.Error())
 	}
 	if errs != nil {
 		return fmt.Errorf("vince: error trying to graceful shutdown %q", strings.Join(errs, ","))
@@ -290,28 +313,34 @@ func nextHandler(next handler) handler {
 }
 
 func (s *serverCtx) init(ctx context.Context, stmt *Stmt) {
-	s.address = make(map[string]listenOpts)
-	s.ls1 = make(map[string][]*rule)
-	s.ls2 = make(map[string]net.Listener)
-	s.ls3 = make(map[string]*http.Server)
+	s.http.address = make(map[string]listenOpts)
+	s.http.ls1 = make(map[string][]*rule)
+	s.http.ls2 = make(map[string]net.Listener)
+	s.http.ls3 = make(map[string]*http.Server)
 
 	core := ruleFromStmt(stmt, nil)
-	s.tpl = templates.HTML()
+	s.http.tpl = templates.HTML()
 	s.core = core
 	var fo readWriterCloserCacheOption
 	fo.defaults()
 	s.fileCache = new(readWriterCloserCache)
 	s.fileCache.initFile(ctx, fo)
+
+	s.metrics = new(metricsCollector)
+	s.metrics.init()
+	s.http.cm = new(connManager)
+	s.http.cm.init()
 }
 
-func createHTTPServer(ctx context.Context, servers []*rule, opts listenOpts) (*http.Server, error) {
+func createHTTPServer(ctx context.Context, srv *serverCtx, servers []*rule, opts listenOpts) (*http.Server, error) {
+	servCtx := srv.with(opts)
+	ctx = context.WithValue(ctx, serverCtxKey{}, servCtx)
 	s := &http.Server{}
-	opts.manager = newHTTPConnManager(nextID)
 	s.BaseContext = func(ls net.Listener) context.Context {
-		return opts.manager.baseCtx(ctx, ls)
+		return srv.http.cm.baseCtx(ctx, ls)
 	}
-	s.ConnState = opts.manager.manageConnState
-	s.ConnContext = opts.manager.connContext
+	s.ConnState = srv.http.cm.manageConnState
+	s.ConnContext = srv.http.cm.connContext
 	s.Handler = vinceHandler(ctx, servers)
 	return s, nil
 }
@@ -524,7 +553,7 @@ func (h *handlerMatch) find(name string) *rule {
 func vinceHandler(ctx context.Context, servers []*rule) http.Handler {
 	srvCtx := ctx.Value(serverCtxKey{}).(*serverCtx)
 	var hm handlerMatch
-	hm.init(servers, srvCtx.defaultServer[srvCtx.active.addrPort])
+	hm.init(servers, srvCtx.http.defaultServer[srvCtx.http.active.addrPort])
 
 	location := new(sync.Map)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

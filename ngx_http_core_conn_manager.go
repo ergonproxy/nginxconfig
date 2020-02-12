@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 
 	"go.uber.org/atomic"
@@ -51,11 +53,9 @@ func (c *httpConnStatus) Reset() httpConnStatus {
 	return h
 }
 
-func newHTTPConnManager(serial func() int64) *connManager {
-	return &connManager{
-		conns:  new(sync.Map),
-		serial: serial,
-	}
+func (c *connManager) init() {
+	c.conns = new(sync.Map)
+	c.serial = nextID
 }
 
 func (m *connManager) manageConnState(conn net.Conn, state http.ConnState) {
@@ -106,9 +106,9 @@ func (m *connManager) manageConnState(conn net.Conn, state http.ConnState) {
 	}
 }
 
-// Close update connection state to closed. This is mainly used with connections
+// CloseConn update connection state to closed. This is mainly used with connections
 // that have StateHijacked its a noop for other states.
-func (m *connManager) Close(conn net.Conn) {
+func (m *connManager) CloseConn(conn net.Conn) {
 	if v, ok := m.conns.Load(conn); ok {
 		s := v.(*connInfo)
 		if s.state == http.StateHijacked {
@@ -117,6 +117,21 @@ func (m *connManager) Close(conn net.Conn) {
 			m.conns.Delete(conn)
 		}
 	}
+}
+
+func (m *connManager) Close() error {
+	var errs []string
+	m.conns.Range(func(key, value interface{}) bool {
+		if err := key.(net.Conn).Close(); err != nil {
+			errs = append(errs, err.Error())
+		}
+		m.conns.Delete(key)
+		return true
+	})
+	if len(errs) > 0 {
+		return fmt.Errorf("conn_manager: error closing connections %s", strings.Join(errs, ","))
+	}
+	return nil
 }
 
 func (m *connManager) id() int64 {

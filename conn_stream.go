@@ -24,16 +24,28 @@ func histogramBucket() tally.Buckets {
 	return tally.DefaultBuckets
 }
 
-func proxyConn(ctx context.Context, ts *metricsCollector, opts proxyConnOpts, local, remote net.Conn) error {
-	watch := ts.tcp.duration.Start()
-	defer func() {
-		watch.Stop()
-	}()
+func proxyConn(ctx context.Context, metrics collectorAPI, opts proxyConnOpts, local, remote net.Conn) error {
 	var n int
 	var err error
 	var firstRemote, firstLocal atomic.Bool
 	firstRemote.Store(true)
 	firstLocal.Store(true)
+	m := map[string]string{
+		"local_local":   local.LocalAddr().String(),
+		"local_remote":  local.RemoteAddr().String(),
+		"remote_local":  remote.LocalAddr().String(),
+		"remote_remote": remote.RemoteAddr().String(),
+	}
+	localRead := metrics.Counter(tcpLocalBytesRead, m)
+	localWrite := metrics.Counter(tcpLocalBytesWrite, m)
+
+	remoteRead := metrics.Counter(tcpRemoteBytesRead, m)
+	remoteWrite := metrics.Counter(tcpRemoteBytesWrite, m)
+
+	duration := metrics.Timer(tcpTotalDuration, m).Start()
+	defer func() {
+		duration.Stop()
+	}()
 	go func() {
 		buf := buffers.GetSlice()
 		defer func() {
@@ -55,7 +67,7 @@ func proxyConn(ctx context.Context, ts *metricsCollector, opts proxyConnOpts, lo
 			if firstLocal.Load() {
 				firstLocal.Store(false)
 			}
-			ts.tcp.local.bytesRead.RecordValue(float64(n))
+			localRead.Inc(int64(n))
 
 			if opts.remote.writeTimeout != 0 {
 				remote.SetWriteDeadline(time.Now().Add(opts.remote.writeTimeout))
@@ -67,7 +79,7 @@ func proxyConn(ctx context.Context, ts *metricsCollector, opts proxyConnOpts, lo
 			if firstRemote.Load() {
 				firstRemote.Store(false)
 			}
-			ts.tcp.upstream.bytesWritten.RecordValue(float64(n))
+			remoteWrite.Inc(int64(n))
 		}
 	}()
 	buf := buffers.GetSlice()
@@ -92,7 +104,7 @@ func proxyConn(ctx context.Context, ts *metricsCollector, opts proxyConnOpts, lo
 		if firstRemote.Load() {
 			firstRemote.Store(false)
 		}
-		ts.tcp.local.bytesWritten.RecordValue(float64(n))
+		remoteRead.Inc(int64(n))
 
 		if opts.local.writeTimeout != 0 {
 			local.SetWriteDeadline(time.Now().Add(opts.local.writeTimeout))
@@ -105,7 +117,7 @@ func proxyConn(ctx context.Context, ts *metricsCollector, opts proxyConnOpts, lo
 		if firstLocal.Load() {
 			firstLocal.Store(false)
 		}
-		ts.tcp.local.bytesWritten.RecordValue(float64(n))
+		localWrite.Inc(int64(n))
 	}
 }
 
@@ -128,7 +140,7 @@ type stream interface {
 	config() proxyConnOpts
 }
 
-func streamListener(ctx context.Context, mx *metricsCollector, ls net.Listener, srv stream) error {
+func streamListener(ctx context.Context, metrics collectorAPI, ls net.Listener, srv stream) error {
 	for {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -138,12 +150,12 @@ func streamListener(ctx context.Context, mx *metricsCollector, ls net.Listener, 
 		if err != nil {
 			return err
 		}
-		mx.tcp.conn.accepted.Inc(1)
-		go streamConn(ctx, mx, l, srv)
+		metrics.Counter(tcpAcceptedConn, map[string]string{}).Inc(1)
+		go streamConn(ctx, metrics, l, srv)
 	}
 }
 
-func streamConn(ctx context.Context, mx *metricsCollector, conn net.Conn, srv stream) error {
+func streamConn(ctx context.Context, mx collectorAPI, conn net.Conn, srv stream) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}

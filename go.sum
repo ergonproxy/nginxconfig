@@ -116,6 +116,14 @@ github.com/labstack/echo/v4 v4.1.13 h1:JYgKq6NQQSaKbQcsOadAKX1kUVLCUzLGwu8sxN5tC
 github.com/labstack/echo/v4 v4.1.13/go.mod h1:3WZNypykZ3tnqpF2Qb4fPg27XDunFqgP3HGDmCMgv7U=
 github.com/labstack/gommon v0.3.0 h1:JEeO0bvc78PKdyHxloTKiF8BD5iGrH8T6MSeGvSgob0=
 github.com/labstack/gommon v0.3.0/go.mod h1:MULnywXg0yavhxWKc+lOruYdAhDwPK9wf0OL7NoOu+k=
+github.com/m3db/prometheus_client_golang v0.8.1 h1:t7w/tcFws81JL1j5sqmpqcOyQOpH4RDOmIe3A3fdN3w=
+github.com/m3db/prometheus_client_golang v0.8.1/go.mod h1:8R/f1xYhXWq59KD/mbRqoBulXejss7vYtYzWmruNUwI=
+github.com/m3db/prometheus_client_model v0.1.0 h1:cg1+DiuyT6x8h9voibtarkH1KT6CmsewBSaBhe8wzLo=
+github.com/m3db/prometheus_client_model v0.1.0/go.mod h1:Qfsxn+LypxzF+lNhak7cF7k0zxK7uB/ynGYoj80zcD4=
+github.com/m3db/prometheus_common v0.1.0 h1:YJu6eCIV6MQlcwND24cRG/aRkZDX1jvYbsNNs1ZYr0w=
+github.com/m3db/prometheus_common v0.1.0/go.mod h1:EBmDQaMAy4B8i+qsg1wMXAelLNVbp49i/JOeVszQ/rs=
+github.com/m3db/prometheus_procfs v0.8.1 h1:LsxWzVELhDU9sLsZTaFLCeAwCn7bC7qecZcK4zobs/g=
+github.com/m3db/prometheus_procfs v0.8.1/go.mod h1:N8lv8fLh3U3koZx1Bnisj60GYUMDpWb09x1R+dmMOJo=
 github.com/magiconair/properties v1.8.0/go.mod h1:PppfXfuXeibc/6YijjN8zIbojt8czPbwD3XqdrwzmxQ=
 github.com/mattn/go-colorable v0.1.2/go.mod h1:U0ppj6V5qS13XJ6of8GYAs25YV2eR4EVcfRqFIhoBtE=
 github.com/mattn/go-colorable v0.1.4 h1:snbPLB8fVfU9iwbbo30TPtbLRzwWu6aJS6Xh4eaaviA=
