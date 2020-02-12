@@ -24,7 +24,7 @@ type (
 
 var tlsCache = new(sync.Map)
 
-type listenOpts struct {
+type httpListenOpts struct {
 	net           string
 	addrPort      string
 	defaultServer bool
@@ -589,8 +589,8 @@ func defaultPort() int {
 	return p
 }
 
-func parseListen(r *rule, defaultPort string) listenOpts {
-	var ls listenOpts
+func parseListen(r *rule, defaultPort string) httpListenOpts {
+	var ls httpListenOpts
 	if len(r.args) > 0 {
 		a := r.args[0]
 		if _, err := strconv.Atoi(a); err == nil {
