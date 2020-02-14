@@ -20,6 +20,7 @@ require (
 	github.com/onsi/gomega v1.8.1 // indirect
 	github.com/open-policy-agent/opa v0.16.0
 	github.com/rakyll/statik v0.1.6
+	github.com/smallnest/weighted v0.0.0-20200122032019-adf21c9b8bd1
 	github.com/sourcegraph/jsonrpc2 v0.0.0-20191222043438-96c4efab7ee2
 	github.com/uber-go/tally v3.3.14+incompatible
 	github.com/urfave/cli/v2 v2.1.1
