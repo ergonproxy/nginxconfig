@@ -1,7 +1,11 @@
 package main
 
 import (
+	"strings"
+	"text/template"
 	"time"
+
+	"github.com/ergongate/vince/buffers"
 )
 
 type stringValue struct {
@@ -104,4 +108,39 @@ func (s interfaceValue) merge(other interfaceValue) interfaceValue {
 		s.value = other.value
 	}
 	return s
+}
+
+type stringTemplateValue struct {
+	value string
+	set   bool
+	tpl   *template.Template
+}
+
+func (s *stringTemplateValue) store(v string) {
+	if !strings.Contains(v, "$") {
+		s.set = true
+		s.value = v
+		return
+	}
+	x := variableRegexp.ReplaceAllFunc(src, func(name []byte) []byte {
+		o := make([]byte, len(name)+5)
+		o = append(o, []byte("{{.$"))
+		o = append(o, name...)
+		o = append(o, []byte("}}"))
+		return o
+	})
+	s.tpl = template.Must(template.New("").Parse(string(x)))
+	s.set = true
+}
+
+func (s *stringTemplateValue) Value(ctx interface{}) string {
+	buf := buffers.GetBytes()
+	defer buffers.PutBytes(buf)
+	if s.tpl == nil {
+		return s.value
+	}
+	if err := s.tpl.Execute(buf, ctx); err != nil {
+		panic(err)
+	}
+	return buf.String()
 }
