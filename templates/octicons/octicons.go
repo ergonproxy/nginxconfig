@@ -28,7 +28,7 @@ func Icon(name string, attrs ...string) (template.HTML, error) {
 					octicon.SetSize(h, i)
 				case "vertical-align":
 					h.Attr[3].Val = strings.Replace(h.Attr[3].Val,
-						"vertical-align: top", fmt.Sprintf("vertical-align: %s", p[1]))
+						"vertical-align: top", fmt.Sprintf("vertical-align: %s", p[1]), -1)
 				}
 			}
 		}
