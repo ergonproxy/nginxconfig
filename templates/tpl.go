@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/ergongate/vince/buffers"
+	"github.com/ergongate/vince/templates/octicons"
 	"github.com/rakyll/statik/fs"
 )
 
@@ -27,7 +28,9 @@ func loadHTML() (*template.Template, error) {
 	if err != nil {
 		return nil, err
 	}
-	tpl := template.New("vince")
+	tpl := template.New("vince").Funcs(template.FuncMap{
+		"octicon": octicons.Icon,
+	})
 	root := "/html"
 	err = fs.Walk(files, root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
