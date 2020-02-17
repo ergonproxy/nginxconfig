@@ -4,6 +4,8 @@ import (
 	"strings"
 	"text/template"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/ergongate/vince/buffers"
 )
@@ -110,6 +112,12 @@ func (s interfaceValue) merge(other interfaceValue) interfaceValue {
 	return s
 }
 
+// stringTemplateValue stores templated string. This allows adding strings with
+// nginx variables, i.e variables with $prefix.
+//
+// Matching groups are also supported, so $1 and $2 will work, however this
+// translates to {{.n_1}} and {{.n_2}} respectively so be careful to pass data
+// with appropriate keys.
 type stringTemplateValue struct {
 	value string
 	set   bool
@@ -122,14 +130,18 @@ func (s *stringTemplateValue) store(v string) {
 		s.value = v
 		return
 	}
-	x := variableRegexp.ReplaceAllFunc(src, func(name []byte) []byte {
-		o := make([]byte, len(name)+5)
-		o = append(o, []byte("{{.$"))
-		o = append(o, name...)
-		o = append(o, []byte("}}"))
+	x := variableRegexp.ReplaceAllFunc([]byte(v), func(name []byte) []byte {
+		var o []byte
+		o = append(o, []byte("{{.")...)
+		r, _ := utf8.DecodeRune(name[1:])
+		if unicode.IsDigit(r) {
+			o = append(o, 'n', '_')
+		}
+		o = append(o, name[1:]...)
+		o = append(o, []byte("}}")...)
 		return o
 	})
-	s.tpl = template.Must(template.New("").Parse(string(x)))
+	s.tpl = template.Must(template.New("variable").Parse(string(x)))
 	s.set = true
 }
 

@@ -295,7 +295,7 @@ func setRequestVariables(m *sync.Map, r *http.Request) {
 	m.Store(vIsArgs, a)
 }
 
-var variableRegexp = regexp.MustCompile(`\$([a-z_]\w*)`)
+var variableRegexp = regexp.MustCompile(`\$([a-z_\d]\w*)`)
 
 func resolveVariables(m *sync.Map, src []byte) []byte {
 	return variableRegexp.ReplaceAllFunc(src, func(name []byte) []byte {
