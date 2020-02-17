@@ -2,8 +2,11 @@ package main
 
 import (
 	"io"
+	"net/http"
+	"strconv"
 	"time"
 
+	"github.com/labstack/echo/v4"
 	"github.com/uber-go/tally"
 	promreporter "github.com/uber-go/tally/prometheus"
 )
@@ -13,6 +16,7 @@ type metricKey uint
 const (
 	httpOpenConnections metricKey = iota
 	httpTotalRequests
+	httpRequestDuration
 
 	tcpAcceptedConn
 	tcpLocalBytesRead
@@ -26,6 +30,8 @@ func (k metricKey) String() string {
 	switch k {
 	case httpTotalRequests:
 		return "http_total_requests"
+	case httpRequestDuration:
+		return "http_request_duration"
 	case tcpAcceptedConn:
 		return "tcp_accepted_conn"
 	case tcpLocalBytesRead:
@@ -50,9 +56,9 @@ type collectorAPI interface {
 }
 
 type metricsCollector struct {
-	scope    tally.Scope
-	reporter tally.StatsReporter
-	closer   io.Closer
+	scope   tally.Scope
+	handler http.Handler
+	closer  io.Closer
 }
 
 func (m *metricsCollector) Close() error {
@@ -68,9 +74,10 @@ func (m *metricsCollector) init() {
 		},
 		CachedReporter: r,
 		Separator:      promreporter.DefaultSeparator,
-	}, 1*time.Second)
+	}, time.Second)
 	m.scope = scope
 	m.closer = closer
+	m.handler = r.HTTPHandler()
 }
 
 func (m *metricsCollector) Counter(key metricKey, tags ...map[string]string) tally.Counter {
@@ -92,4 +99,32 @@ func (m *metricsCollector) Timer(key metricKey, tags ...map[string]string) tally
 		return m.scope.Tagged(tags[0]).Timer(key.String())
 	}
 	return m.scope.Timer(key.String())
+}
+
+func instrumentEcho(scope collectorAPI) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			req := c.Request()
+			path := c.Path()
+
+			timer := scope.Timer(httpRequestDuration, map[string]string{
+				"path":   path,
+				"method": req.Method,
+			}).Start()
+			err := next(c)
+			timer.Stop()
+
+			if err != nil {
+				c.Error(err)
+			}
+
+			status := strconv.Itoa(c.Response().Status)
+			scope.Counter(httpTotalRequests, map[string]string{
+				"path":   path,
+				"method": req.Method,
+				"status": status,
+			}).Inc(1)
+			return err
+		}
+	}
 }

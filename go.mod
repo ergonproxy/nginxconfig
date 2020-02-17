@@ -8,6 +8,7 @@ require (
 	github.com/dgraph-io/badger/v2 v2.0.1
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/hashicorp/raft v1.1.2
+	github.com/labstack/echo v3.3.10+incompatible
 	github.com/labstack/echo/v4 v4.1.13
 	github.com/m3db/prometheus_client_golang v0.8.1 // indirect
 	github.com/m3db/prometheus_client_model v0.1.0 // indirect
@@ -19,6 +20,7 @@ require (
 	github.com/onsi/ginkgo v1.11.0 // indirect
 	github.com/onsi/gomega v1.8.1 // indirect
 	github.com/open-policy-agent/opa v0.16.0
+	github.com/prometheus/client_golang v0.9.2
 	github.com/rakyll/statik v0.1.6
 	github.com/shurcooL/octicon v0.0.0-20191102190552-cbb32d6a785c
 	github.com/smallnest/weighted v0.0.0-20200122032019-adf21c9b8bd1

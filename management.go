@@ -16,8 +16,10 @@ type management struct {
 func (m *management) init(ctx *serverCtx) {
 	m.ctx = ctx
 	h := echo.New()
+	h.Use(instrumentEcho(ctx.metrics))
 	h.GET("/", m.index)
 	h.GET("/assets/*", m.static())
+	h.GET("/metrics", echo.WrapHandler(m.ctx.metrics.handler))
 	m.h = h
 }
 
