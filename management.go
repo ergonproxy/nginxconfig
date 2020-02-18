@@ -17,6 +17,7 @@ func (m *management) init(ctx *serverCtx) {
 	m.ctx = ctx
 	h := echo.New()
 	h.Use(instrumentEcho(ctx.metrics))
+	h.Use(accessLog)
 	h.GET("/", m.index)
 	h.GET("/assets/*", m.static())
 	h.GET("/metrics", echo.WrapHandler(m.ctx.metrics.handler))

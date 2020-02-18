@@ -93,6 +93,7 @@ func errorLog(ctx context.Context, err error) {
 }
 
 func accessLog(next echo.HandlerFunc) echo.HandlerFunc {
+	tpls := make(map[string]*stringTemplateValue)
 	return func(echoCtx echo.Context) error {
 		ctx := echoCtx.Request().Context()
 		dest := ctx.Value(accessLogPathKey{})
@@ -115,47 +116,64 @@ func accessLog(next echo.HandlerFunc) echo.HandlerFunc {
 				echoCtx.Error(err)
 			}
 			duration := time.Since(start)
-			m := ctx.Value(variables{}).(*sync.Map)
-			m.Store(vRequestTime, duration.Milliseconds())
+			m := ctx.Value(variables{}).(map[string]interface{})
+			m[vRequestTime] = duration.Milliseconds()
 			format := defaultLogFormat
 			if f := ctx.Value(accessLogFormat{}); f != nil {
 				format = f.(string)
 			}
-			ngx.Println(destPath, level, resolveVariables(m, []byte(format)))
+			formatTpl, ok := tpls[format]
+			if !ok {
+				s := new(stringTemplateValue)
+				s.store(format)
+				tpls[format] = s
+				formatTpl = s
+			}
+			ngx.Println(destPath, level, []byte(formatTpl.Value(m)))
 		}
 		return nil
 	}
 }
 
-func logMiddleware(next handler) handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-		dest := ctx.Value(accessLogPathKey{})
-		if dest == nil {
-			next.ServeHTTP(w, r)
-			return
-		}
-		destPath := dest.(string)
-		if destPath == "" || destPath == "/dev/null" {
-			next.ServeHTTP(w, r)
-			return
-		}
-		level := "info"
-		if v := ctx.Value(accessLogLevelKey{}); v != nil {
-			level = v.(string)
-		}
-		if v := ctx.Value(ngxLoggerKey{}); v != nil {
-			ngx := v.(ngxLogger)
-			start := time.Now()
-			next.ServeHTTP(w, r)
-			duration := time.Since(start)
-			m := ctx.Value(variables{}).(*sync.Map)
-			m.Store(vRequestTime, duration.Milliseconds())
-			format := defaultLogFormat
-			if f := ctx.Value(accessLogFormat{}); f != nil {
-				format = f.(string)
+func accessLogMiddlewareFunc() func(handler) handler {
+	tpls := make(map[string]*stringTemplateValue)
+	return func(next handler) handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			dest := ctx.Value(accessLogPathKey{})
+			if dest == nil {
+				next.ServeHTTP(w, r)
+				return
 			}
-			ngx.Println(destPath, level, resolveVariables(m, []byte(format)))
-		}
-	})
+			destPath := dest.(string)
+			if destPath == "" || destPath == "/dev/null" {
+				next.ServeHTTP(w, r)
+				return
+			}
+			level := "info"
+			if v := ctx.Value(accessLogLevelKey{}); v != nil {
+				level = v.(string)
+			}
+			if v := ctx.Value(ngxLoggerKey{}); v != nil {
+				ngx := v.(ngxLogger)
+				start := time.Now()
+				next.ServeHTTP(w, r)
+				duration := time.Since(start)
+				m := ctx.Value(variables{}).(map[string]interface{})
+				m[vRequestTime] = duration.Milliseconds()
+				format := defaultLogFormat
+				if f := ctx.Value(accessLogFormat{}); f != nil {
+					format = f.(string)
+				}
+				formatTpl, ok := tpls[format]
+				if !ok {
+					s := new(stringTemplateValue)
+					s.store(format)
+					tpls[format] = s
+					formatTpl = s
+				}
+				ngx.Println(destPath, level, []byte(formatTpl.Value(m)))
+			}
+		})
+	}
 }

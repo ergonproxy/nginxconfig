@@ -13,7 +13,6 @@ import (
 
 type (
 	vinceConfigKey struct{}
-	connManagerKey struct{}
 )
 
 type connManager struct {
@@ -196,11 +195,8 @@ func (m *connManager) connContext(baseCtx context.Context, conn net.Conn) contex
 	return baseCtx
 }
 
-func (m *connManager) baseCtx(ctx context.Context, ls net.Listener) context.Context {
-	v := new(sync.Map)
-	baseCtx := context.WithValue(ctx, variables{}, v)
-	baseCtx = context.WithValue(baseCtx, connManagerKey{}, m)
-	return baseCtx
+func (c *connManager) baseCtx(ctx context.Context, ls net.Listener) context.Context {
+	return context.WithValue(ctx, variables{}, make(map[string]interface{}))
 }
 
 func (m *connManager) getID(conn net.Conn) int64 {

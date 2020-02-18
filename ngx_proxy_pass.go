@@ -34,7 +34,7 @@ type proxyOption struct {
 		key     stringValue
 	}
 	pass struct {
-		uri      stringValue
+		uri      stringTemplateValue
 		header   stringSliceValue
 		body     boolValue
 		headers  boolValue
@@ -137,11 +137,11 @@ func (p *proxy) init(location *rule, transport http.RoundTripper) {
 
 func (p *proxy) director(r *http.Request) {
 	ctx := r.Context()
-	v := ctx.Value(variables{}).(*sync.Map)
-	target := eval(v, p.opts.pass.uri.value)
+	v := ctx.Value(variables{}).(map[string]interface{})
+	target := p.opts.pass.uri.Value(v)
 	u, _ := parseProxyURL(target)
 	p.origURL = r.URL
-	if k, ok := v.Load(vRequestMatchKind); ok {
+	if k, ok := v[vRequestMatchKind]; ok {
 		m := k.(*match)
 		switch m.kind {
 		case matchPrefix:

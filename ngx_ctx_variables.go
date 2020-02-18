@@ -2,13 +2,8 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"os"
-	"regexp"
-	"strings"
-	"sync"
-	"time"
 )
 
 // time formats
@@ -172,97 +167,27 @@ const (
 
 // extra ctx keys
 type (
-	uriKey     struct{}
-	tlsModeKey struct{}
-	requestID  struct{}
+	requestID struct{}
 )
-type variableFunc func() interface{}
 
-func createVariables() *sync.Map {
-	m := new(sync.Map)
-	setTimeVariables(m)
-	return m
-}
-
-func setTimeVariables(m *sync.Map) {
-	cache := cachedTimeFunc()
-	m.Store(vDateGMT, cache(func(ts time.Time) string {
-		return ts.Format(http.TimeFormat)
-	}))
-	m.Store(vDateLocal, cache(func(ts time.Time) string {
-		return ts.Format(time.RFC1123)
-	}))
-	m.Store(vTimeISO8601, cache(func(ts time.Time) string {
-		return ts.Format(iso8601Milli)
-	}))
-	m.Store(vTimeLocal, cache(func(ts time.Time) string {
-		return ts.Local().Format(commonLogFormatTime)
-	}))
-}
-
-func setVariable(ctx context.Context, key, value interface{}) {
-	_, ok := key.(string)
-	if !ok {
-		return
-	}
+func setVariable(ctx context.Context, key string, value interface{}) {
 	if v := ctx.Value(variables{}); v != nil {
-		v.(*sync.Map).Store(key, value)
+		v.(map[string]interface{})[key] = value
 	}
 }
 
-func getVariable(m *sync.Map, key interface{}) interface{} {
-	_, ok := key.(string)
-	if !ok {
-		return nil
-	}
-	if v, ok := m.Load(variables{}); ok {
-		switch e := v.(type) {
-		case variableFunc:
-			return e()
-		default:
-			return e
-		}
-	}
-	return nil
-}
-
-func cachedFunc(f func() interface{}) func() interface{} {
-	var n interface{}
-	return func() interface{} {
-		if n != nil {
-			return n
-		}
-		if f != nil {
-			n = f()
-		}
-		return n
-	}
-}
-
-func cachedTimeFunc() func(func(time.Time) string) variableFunc {
-	cache := cachedFunc(func() interface{} {
-		return time.Now()
-	})
-	return func(f func(time.Time) string) variableFunc {
-		return func() interface{} {
-			now := cache().(time.Time)
-			return f(now)
-		}
-	}
-}
-
-func setRequestVariables(m *sync.Map, r *http.Request) {
+func setRequestVariables(m map[string]interface{}, r *http.Request) {
 	// seeting query variables
 	query := r.URL.Query()
 	for k := range query {
 		// setting $arg_{query_name}
-		m.Store(vArg+"_"+k, query.Get(k))
+		m[vArg+"_"+k] = query.Get(k)
 	}
-	m.Store(vArgs, r.URL.RawQuery)
-	m.Store(vContentLength, r.Header.Get("Content-Length"))
-	m.Store(vContentType, r.Header.Get("Content-Type"))
+	m[vArgs] = r.URL.RawQuery
+	m[vContentLength] = r.Header.Get("Content-Length")
+	m[vContentType] = r.Header.Get("Content-Type")
 	for _, cookie := range r.Cookies() {
-		m.Store(vCookie+"_"+cookie.Name, cookie.Value)
+		m[vCookie+"_"+cookie.Name] = cookie.Value
 	}
 	ctx := r.Context()
 	root := ""
@@ -271,8 +196,9 @@ func setRequestVariables(m *sync.Map, r *http.Request) {
 	} else if v := ctx.Value(aliasKey{}); v != nil {
 		root = v.(string)
 	}
-	m.Store(vDocumentRoot, root)
-	m.Store(vDocumentURI, ctx.Value(uriKey{}))
+	m[vDocumentRoot] = root
+	m[vDocumentURI] = r.URL
+	m[vURI] = r.URL
 	host := r.Host
 	if host == "" {
 		host = r.Header.Get("Host")
@@ -282,45 +208,15 @@ func setRequestVariables(m *sync.Map, r *http.Request) {
 			host = v.(string)
 		}
 	}
-	m.Store(vHost, host)
+	m[vHost] = host
 	n, _ := os.Hostname() //TODO: handle errors
-	m.Store(vHostname, n)
+	m[vHostname] = n
 	for h := range r.Header {
-		m.Store(vHTTP+"_"+h, r.Header.Get(h))
+		m[vHTTP+"_"+h] = r.Header.Get(h)
 	}
 	a := ""
 	if len(query) > 0 {
 		a = "?"
 	}
-	m.Store(vIsArgs, a)
-}
-
-var variableRegexp = regexp.MustCompile(`\$([a-z_\d]\w*)`)
-
-func resolveVariables(m *sync.Map, src []byte) []byte {
-	return variableRegexp.ReplaceAllFunc(src, func(name []byte) []byte {
-		n := string(name)
-		if v := getVariable(m, n); v != nil {
-			return toByte(v)
-		}
-		return []byte{}
-	})
-}
-
-func eval(m *sync.Map, key string) string {
-	if !strings.Contains(key, "$") {
-		return key
-	}
-	return string(resolveVariables(m, []byte(key)))
-}
-
-func toByte(v interface{}) []byte {
-	switch e := v.(type) {
-	case []byte:
-		return e
-	case string:
-		return []byte(e)
-	default:
-		return []byte(fmt.Sprint(v))
-	}
+	m[vIsArgs] = a
 }

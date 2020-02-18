@@ -3,9 +3,11 @@ package templates
 import (
 	"html/template"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/ergongate/vince/buffers"
 	"github.com/ergongate/vince/templates/octicons"
@@ -15,12 +17,28 @@ import (
 var htmlTpl *template.Template
 var htmlOnce sync.Once
 
+// time formats
+const (
+	iso8601Milli        = "2006-01-02T15:04:05.000Z"
+	commonLogFormatTime = "02/Jan/2006:15:04:05 -0700"
+)
+
 // HTML returns template with all embedded templates loaded
 func HTML() *template.Template {
 	htmlOnce.Do(func() {
 		htmlTpl = template.Must(loadHTML())
 	})
 	return htmlTpl
+}
+
+// IsVariableFunc returns true if variable is a template function
+func IsVariableFunc(v string) bool {
+	switch v {
+	case "date_gmt", "date_local", "time_iso8601", "time_local":
+		return true
+	default:
+		return false
+	}
 }
 
 func loadHTML() (*template.Template, error) {
@@ -30,6 +48,18 @@ func loadHTML() (*template.Template, error) {
 	}
 	tpl := template.New("vince").Funcs(template.FuncMap{
 		"octicon": octicons.Icon,
+		"date_gmt": func() string {
+			return time.Now().Format(http.TimeFormat)
+		},
+		"date_local": func() string {
+			return time.Now().Format(time.RFC1123)
+		},
+		"time_iso8601": func() string {
+			return time.Now().Format(iso8601Milli)
+		},
+		"time_local": func() string {
+			return time.Now().Format(commonLogFormatTime)
+		},
 	})
 	root := "/html"
 	err = fs.Walk(files, root, func(path string, info os.FileInfo, err error) error {

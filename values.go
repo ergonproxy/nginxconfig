@@ -1,6 +1,7 @@
 package main
 
 import (
+	"regexp"
 	"strings"
 	"text/template"
 	"time"
@@ -8,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/ergongate/vince/buffers"
+	"github.com/ergongate/vince/templates"
 )
 
 type stringValue struct {
@@ -124,6 +126,8 @@ type stringTemplateValue struct {
 	tpl   *template.Template
 }
 
+var variableRegexp = regexp.MustCompile(`\$([a-z_\d]\w*)`)
+
 func (s *stringTemplateValue) store(v string) {
 	if !strings.Contains(v, "$") {
 		s.set = true
@@ -132,10 +136,14 @@ func (s *stringTemplateValue) store(v string) {
 	}
 	x := variableRegexp.ReplaceAllFunc([]byte(v), func(name []byte) []byte {
 		var o []byte
-		o = append(o, []byte("{{.")...)
-		r, _ := utf8.DecodeRune(name[1:])
-		if unicode.IsDigit(r) {
-			o = append(o, 'n', '_')
+		if templates.IsVariableFunc(string(name[1:])) {
+			o = append(o, []byte("{{")...)
+		} else {
+			o = append(o, []byte("{{.")...)
+			r, _ := utf8.DecodeRune(name[1:])
+			if unicode.IsDigit(r) {
+				o = append(o, 'n', '_')
+			}
 		}
 		o = append(o, name[1:]...)
 		o = append(o, []byte("}}")...)

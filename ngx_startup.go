@@ -301,7 +301,7 @@ func (s *serverCtx) shutdown(ctx context.Context) error {
 }
 
 func (s *serverCtx) chain(r ...*rule) alice {
-	var a alice
+	a := alice{accessLogMiddlewareFunc()}
 	for _, v := range r {
 		a = append(a, s.handle(v))
 	}
@@ -558,7 +558,7 @@ func vinceHandler(ctx context.Context, servers []*rule) http.Handler {
 	location := new(sync.Map)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
-		variable := ctx.Value(variables{}).(*sync.Map)
+		variable := ctx.Value(variables{}).(map[string]interface{})
 		setRequestVariables(variable, r)
 		var srv *rule
 		if len(servers) == 1 {
@@ -579,7 +579,7 @@ func vinceHandler(ctx context.Context, servers []*rule) http.Handler {
 		}
 		if l := loc.match(r.URL.Path); l != nil {
 			c := l.rule.collect(nil)
-			variable.Store(vRequestMatchKind, l)
+			variable[vRequestMatchKind] = l
 			srvCtx.chain(overide(c)...).then(nil).ServeHTTP(w, r)
 			return
 		}
