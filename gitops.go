@@ -2,12 +2,11 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/ergongate/vince/buffers"
 	"github.com/labstack/echo/v4"
@@ -15,7 +14,9 @@ import (
 	"gopkg.in/src-d/go-git.v4"
 	"gopkg.in/src-d/go-git.v4/plumbing"
 	"gopkg.in/src-d/go-git.v4/plumbing/protocol/packp"
+	"gopkg.in/src-d/go-git.v4/plumbing/storer"
 	"gopkg.in/src-d/go-git.v4/plumbing/transport"
+	"gopkg.in/src-d/go-git.v4/plumbing/transport/server"
 )
 
 // This provide api for managing vince configuration directory. By default
@@ -23,60 +24,104 @@ import (
 // upon change on the configuration file a.k.a hooks.
 type gitOps struct {
 	opts   gitOpsOptions
-	repo   *git.Repository
+	repos  repoLoader
 	server transport.Transport
-	hand   http.Handler
 }
 
 type gitOpsOptions struct {
 	dir  string
-	repo struct {
-		path   string
-		remote string
-		clone  git.CloneOptions
-		pull   git.PullOptions
-		latest bool
-	}
+	auth bool
 }
 
-func (o gitOpsOptions) path() string {
-	return filepath.Join(o.dir, o.repo.path)
+type repoLoader struct {
+	allowed []string
+	paths   *sync.Map
+	dir     string
+	auth    func(username, password string) bool
+}
+
+func (r *repoLoader) init(dir string, auth func(username, password string) bool) {
+	r.paths = new(sync.Map)
+	r.allowed = []string{"config"}
+	r.dir = dir
+	r.auth = auth
+}
+
+func (r *repoLoader) Load(ep *transport.Endpoint) (storer.Storer, error) {
+	o, err := r.load(ep)
+	if err != nil {
+		return nil, err
+	}
+	return o.Storer, nil
+}
+
+func (r *repoLoader) load(ep *transport.Endpoint) (*git.Repository, error) {
+	if r.auth != nil {
+		if ep.User == "" || ep.Password == "" {
+			return nil, transport.ErrAuthenticationRequired
+		}
+		if !r.auth(ep.User, ep.Password) {
+			return nil, transport.ErrAuthorizationFailed
+		}
+	}
+	e := filepath.FromSlash(ep.Path)
+	e = filepath.Join(r.dir, e)
+	if s, ok := r.paths.Load(e); ok {
+		return s.(*git.Repository), nil
+	}
+	for _, a := range r.allowed {
+		if a == e {
+			s, err := git.PlainOpen(e)
+			if err != nil {
+				if err != git.ErrRepositoryNotExists {
+					return nil, err
+				}
+				s, err = git.PlainInit(e, false)
+				if err != nil {
+					return nil, err
+				}
+				r.paths.Store(e, s)
+				return s, nil
+			}
+			r.paths.Store(e, s)
+			return s, nil
+		}
+	}
+	return nil, transport.ErrRepositoryNotFound
 }
 
 func (o *gitOps) init(ctx context.Context, opts gitOpsOptions) (err error) {
 	o.opts = opts
-	path := opts.path()
-	stat, err := os.Stat(path)
-	if os.IsNotExist(err) {
-		if opts.repo.remote == "" {
-			return err
-		}
-		// we are cloning the new repo repo from remote
-		o.repo, err = git.PlainCloneContext(ctx, path, false, &opts.repo.clone)
-	} else {
-		if !stat.IsDir() {
-			return errors.New("gitops: repository path is not a directory")
-		}
-		o.repo, err = git.PlainOpen(opts.path())
-		if err != nil {
-			return
-		}
-	}
-	e := echo.New()
-	e.GET("/info/refs", echo.WrapHandler(http.HandlerFunc(o.refs)))
-	e.GET("/git-upload-pack", echo.WrapHandler(http.HandlerFunc(o.up)))
-	e.GET("/git-receive-pack", echo.WrapHandler(http.HandlerFunc(o.down)))
-	o.hand = e
+	o.repos.init(opts.dir, nil)
+	o.server = server.NewServer(&o.repos)
 	return
 }
 
-func (o *gitOps) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	o.hand.ServeHTTP(w, r)
+func (o *gitOps) handler(e *echo.Echo) {
+	e.GET("/info/refs", echo.WrapHandler(
+		http.HandlerFunc(o.refs),
+	))
+	e.GET("/git-upload-pack", echo.WrapHandler(
+		http.HandlerFunc(o.up)),
+	)
+	e.GET("/git-receive-pack", echo.WrapHandler(
+		http.HandlerFunc(o.down),
+	))
 }
 
 func (o *gitOps) refs(w http.ResponseWriter, r *http.Request) {
+	ep, err := o.endpoint(r)
+	if err != nil {
+		// TODO?
+		return
+	}
+	repo, err := o.repos.load(ep)
+	if err != nil {
+		// TODO?
+		return
+	}
 	ad := packp.NewAdvRefs()
-	refs, err := o.repo.References()
+	refs, err := repo.References()
 	if err != nil {
 		return
 	}
@@ -159,11 +204,19 @@ func (o *gitOps) endpoint(r *http.Request) (*transport.Endpoint, error) {
 }
 
 func (o *gitOps) upSession(r *http.Request) (transport.UploadPackSession, error) {
-	return nil, nil
+	ep, err := o.endpoint(r)
+	if err != nil {
+		return nil, err
+	}
+	return o.server.NewUploadPackSession(ep, nil)
 }
 
 func (o *gitOps) downSession(r *http.Request) (transport.ReceivePackSession, error) {
-	return nil, nil
+	ep, err := o.endpoint(r)
+	if err != nil {
+		return nil, err
+	}
+	return o.server.NewReceivePackSession(ep, nil)
 }
 
 func (o *gitOps) setHeaders(h http.Header, cmd string) {
