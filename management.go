@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/http"
+	"path/filepath"
 
 	"github.com/ergongate/vince/buffers"
 	"github.com/ergongate/vince/templates"
@@ -10,6 +11,7 @@ import (
 
 type management struct {
 	ctx *serverCtx
+	git gitOps
 	h   http.Handler
 }
 
@@ -21,6 +23,10 @@ func (m *management) init(ctx *serverCtx) {
 	h.GET("/", m.index)
 	h.GET("/assets/*", m.static())
 	h.GET("/metrics", echo.WrapHandler(m.ctx.metrics.handler))
+	var ops gitOpsOptions
+	ops.dir = filepath.Join(ctx.config.dir, "configs")
+	m.git.init(ops)
+	m.git.handler(h)
 	m.h = h
 }
 

@@ -1,11 +1,11 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/ergongate/vince/buffers"
@@ -90,7 +90,7 @@ func (r *repoLoader) load(ep *transport.Endpoint) (*git.Repository, error) {
 	return nil, transport.ErrRepositoryNotFound
 }
 
-func (o *gitOps) init(ctx context.Context, opts gitOpsOptions) (err error) {
+func (o *gitOps) init(opts gitOpsOptions) (err error) {
 	o.opts = opts
 	o.repos.init(opts.dir, nil)
 	o.server = server.NewServer(&o.repos)
@@ -98,7 +98,7 @@ func (o *gitOps) init(ctx context.Context, opts gitOpsOptions) (err error) {
 }
 
 func (o *gitOps) handler(e *echo.Echo) {
-	e.GET("/info/refs", echo.WrapHandler(
+	e.GET("/:project/info/refs", echo.WrapHandler(
 		http.HandlerFunc(o.refs),
 	))
 	e.GET("/git-upload-pack", echo.WrapHandler(
@@ -110,6 +110,9 @@ func (o *gitOps) handler(e *echo.Echo) {
 }
 
 func (o *gitOps) refs(w http.ResponseWriter, r *http.Request) {
+	if !o.setup(w, r) {
+		return
+	}
 	ep, err := o.endpoint(r)
 	if err != nil {
 		// TODO?
@@ -139,6 +142,9 @@ func (o *gitOps) refs(w http.ResponseWriter, r *http.Request) {
 }
 
 func (o *gitOps) up(w http.ResponseWriter, r *http.Request) {
+	if !o.setup(w, r) {
+		return
+	}
 	s, err := o.upSession(r)
 	if err != nil {
 		return
@@ -169,6 +175,9 @@ func (o *gitOps) up(w http.ResponseWriter, r *http.Request) {
 }
 
 func (o *gitOps) down(w http.ResponseWriter, r *http.Request) {
+	if !o.setup(w, r) {
+		return
+	}
 	s, err := o.downSession(r)
 	if err != nil {
 		return
@@ -199,8 +208,28 @@ func (o *gitOps) down(w http.ResponseWriter, r *http.Request) {
 	io.Copy(w, buf)
 }
 
+func (o *gitOps) setup(w http.ResponseWriter, r *http.Request) bool {
+	if r.Header.Get(HeaderAuthorization) == "" {
+		w.Header()["WWW-Authenticate"] = []string{`Basic realm=""`}
+		w.WriteHeader(http.StatusUnauthorized)
+		return false
+	}
+	return true
+}
+
 func (o *gitOps) endpoint(r *http.Request) (*transport.Endpoint, error) {
-	return nil, nil
+	var basic basicAuth
+	basic.init(r, false)
+	e := &transport.Endpoint{
+		Protocol: "http",
+		User:     basic.UserName,
+		Password: basic.Password,
+	}
+	p := strings.Split(r.URL.Path, "/") // TODO be robust and remove service prefix
+	if len(p) > 1 {
+		e.Path = p[1]
+	}
+	return e, nil
 }
 
 func (o *gitOps) upSession(r *http.Request) (transport.UploadPackSession, error) {

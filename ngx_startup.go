@@ -150,7 +150,7 @@ func startEverything(mainCtx context.Context, config *vinceConfiguration, ready 
 	d := &Stmt{Directive: "main"}
 	d.Blocks = p.Config[0].Parsed
 	var srvCtx serverCtx
-	srvCtx.init(ctx, d)
+	srvCtx.init(ctx, d, config)
 
 	defer func() {
 		srvCtx.shutdown(context.Background())
@@ -215,8 +215,9 @@ func startEverything(mainCtx context.Context, config *vinceConfiguration, ready 
 }
 
 type serverCtx struct {
-	core *rule
-	http struct {
+	core   *rule
+	config *vinceConfiguration
+	http   struct {
 		tpl            *template.Template
 		defaultServer  map[string]*rule
 		address        map[string]httpListenOpts
@@ -241,6 +242,7 @@ func (s *serverCtx) with(active httpListenOpts) *serverCtx {
 	n.fileCache = s.fileCache
 	n.metrics = s.metrics
 	n.http.connManager = s.http.connManager
+	n.config = s.config
 	return n
 }
 
@@ -312,7 +314,7 @@ func nextHandler(next handler) handler {
 	return next
 }
 
-func (s *serverCtx) init(ctx context.Context, stmt *Stmt) {
+func (s *serverCtx) init(ctx context.Context, stmt *Stmt, cfg *vinceConfiguration) {
 	s.http.address = make(map[string]httpListenOpts)
 	s.http.serverRules = make(map[string][]*rule)
 	s.http.listeners = make(map[string]net.Listener)
@@ -321,6 +323,7 @@ func (s *serverCtx) init(ctx context.Context, stmt *Stmt) {
 	core := ruleFromStmt(stmt, nil)
 	s.http.tpl = templates.HTML()
 	s.core = core
+	s.config = cfg
 	var fo readWriterCloserCacheOption
 	fo.defaults()
 	s.fileCache = new(readWriterCloserCache)
