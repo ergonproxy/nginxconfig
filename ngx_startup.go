@@ -151,7 +151,9 @@ func startEverything(mainCtx context.Context, config *vinceConfiguration, ready 
 	d.Blocks = p.Config[0].Parsed
 	var srvCtx serverCtx
 	srvCtx.init(ctx, d, config)
-
+	ctx = context.WithValue(ctx, ngxLoggerKey{}, &cacheLogger{
+		cache: srvCtx.fileCache,
+	})
 	defer func() {
 		srvCtx.shutdown(context.Background())
 	}()
