@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"strings"
 	"sync"
@@ -75,15 +76,28 @@ type cacheLogger struct {
 	cache *readWriterCloserCache
 }
 
+type syncer interface {
+	Sync() error
+}
+
 func (c *cacheLogger) Print(file string, level string, message []byte) error {
 	if f, ok := c.cache.Get(file); ok {
-		f.Write(message)
-	} else {
-		f, err := c.cache.Put(file)
-		if err != nil {
-			return err
-		}
-		f.Write(message)
+		return c.sync(f, message)
+	}
+	f, err := c.cache.Put(file)
+	if err != nil {
+		return err
+	}
+	return c.sync(f, message)
+}
+
+func (c *cacheLogger) sync(w io.WriteCloser, data []byte) error {
+	_, err := w.Write(data)
+	if err != nil {
+		return err
+	}
+	if s, ok := w.(syncer); ok {
+		return s.Sync()
 	}
 	return nil
 }
