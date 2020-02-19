@@ -102,8 +102,40 @@ func (c *cacheLogger) sync(w io.WriteCloser, data []byte) error {
 	return nil
 }
 
-func errorLog(ctx context.Context, err error) {
-	//TODO: implement
+func errorLog(ctx context.Context, level, message string) {
+	if f := ctx.Value(errorLogKey{}); f != nil {
+		if lg := ctx.Value(ngxLoggerKey{}); lg != nil {
+			lg.(ngxLogger).Println(f.(string), level, []byte(message))
+		}
+	}
+}
+
+func logDebug(ctx context.Context, msg string) {
+	errorLog(ctx, "info", msg)
+}
+
+func logInfo(ctx context.Context, msg string) {
+	errorLog(ctx, "debug", msg)
+}
+
+func logNotice(ctx context.Context, msg string) {
+	errorLog(ctx, "notice", msg)
+}
+
+func logWarn(ctx context.Context, msg string) {
+	errorLog(ctx, "warn", msg)
+}
+
+func logError(ctx context.Context, msg string) {
+	errorLog(ctx, "error", msg)
+}
+
+func logCrit(ctx context.Context, msg string) {
+	errorLog(ctx, "crit", msg)
+}
+
+func logAlert(ctx context.Context, msg string) {
+	errorLog(ctx, "alert", msg)
 }
 
 func accessLog(next echo.HandlerFunc) echo.HandlerFunc {
