@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"crypto/rand"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -962,9 +961,8 @@ func (o *oauth2) access(w http.ResponseWriter, r *http.Request) error {
 	code := r.Form.Get(oauth2ParamCode)
 
 	var basic basicAuth
-	if err := basic.init(r, true); err != nil {
+	if !basic.init(r, true) {
 		ctx.setErrState(oauth2ErrInvalidClient, "", "")
-		ctx.internalErr = err
 		return ctx.commit(w)
 	}
 	if o.opts.accessAllowed(accessGrant) {
@@ -1142,40 +1140,15 @@ type basicAuth struct {
 	Password string
 }
 
-func (b *basicAuth) init(r *http.Request, allowQueryParams bool) error {
+func (b *basicAuth) init(r *http.Request, allowQueryParams bool) bool {
 	b.UserName = r.Form.Get("client_id")
 	b.Password = r.Form.Get("client_secret")
 	if allowQueryParams && b.Password != "" && b.UserName != "" {
-		return nil
+		return true
 	}
-	return b.check(r)
-}
-
-func (b *basicAuth) check(r *http.Request) error {
-	var (
-		basic                   = "Basic"
-		authorize               = "Authorization"
-		errInvalidUthorizeHader = errors.New("Invalid authorization header")
-	)
-	authHeader := r.Header.Get(authorize)
-	components := strings.SplitN(authHeader, " ", 2)
-
-	if len(components) != 2 || components[0] != basic {
-		return errInvalidUthorizeHader
-	}
-
-	base, err := base64.StdEncoding.DecodeString(components[1])
-	if err != nil {
-		return err
-	}
-
-	keyPairs := strings.SplitN(string(base), ":", 2)
-	if len(keyPairs) != 2 {
-		return errInvalidUthorizeHader
-	}
-	b.UserName = keyPairs[0]
-	b.Password = keyPairs[1]
-	return nil
+	var ok bool
+	b.UserName, b.Password, ok = r.BasicAuth()
+	return ok
 }
 
 type bearerAuth struct {

@@ -1,18 +1,18 @@
 package main
 
 import (
+	"compress/gzip"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 
-	"github.com/ergongate/vince/buffers"
 	"github.com/labstack/echo/v4"
 
 	"gopkg.in/src-d/go-git.v4"
-	"gopkg.in/src-d/go-git.v4/plumbing"
+	"gopkg.in/src-d/go-git.v4/plumbing/format/pktline"
 	"gopkg.in/src-d/go-git.v4/plumbing/protocol/packp"
 	"gopkg.in/src-d/go-git.v4/plumbing/storer"
 	"gopkg.in/src-d/go-git.v4/plumbing/transport"
@@ -35,15 +35,20 @@ type gitOpsOptions struct {
 
 type repoLoader struct {
 	allowed []string
-	paths   *sync.Map
 	dir     string
 	auth    func(username, password string) bool
 }
 
 func (r *repoLoader) init(dir string, auth func(username, password string) bool) {
-	r.paths = new(sync.Map)
-	r.allowed = []string{"config"}
+	r.allowed = []string{"vince", "project", "project.git"}
 	r.dir = dir
+	_, err := os.Stat(dir)
+	if os.IsNotExist(err) {
+		err = os.MkdirAll(dir, 0777)
+		if err != nil {
+			panic(err)
+		}
+	}
 	r.auth = auth
 }
 
@@ -65,25 +70,23 @@ func (r *repoLoader) load(ep *transport.Endpoint) (*git.Repository, error) {
 		}
 	}
 	e := filepath.FromSlash(ep.Path)
-	e = filepath.Join(r.dir, e)
-	if s, ok := r.paths.Load(e); ok {
-		return s.(*git.Repository), nil
-	}
 	for _, a := range r.allowed {
+		a = filepath.Join(r.dir, a)
 		if a == e {
-			s, err := git.PlainOpen(e)
-			if err != nil {
-				if err != git.ErrRepositoryNotExists {
-					return nil, err
-				}
-				s, err = git.PlainInit(e, false)
+			var s *git.Repository
+			_, err := os.Stat(e)
+			if os.IsNotExist(err) {
+				err = os.Mkdir(e, 0777)
 				if err != nil {
 					return nil, err
 				}
-				r.paths.Store(e, s)
-				return s, nil
+				s, err = git.PlainInit(e, false)
+			} else {
+				s, err = git.PlainOpen(e)
 			}
-			r.paths.Store(e, s)
+			if err != nil {
+				return nil, err
+			}
 			return s, nil
 		}
 	}
@@ -98,47 +101,80 @@ func (o *gitOps) init(opts gitOpsOptions) (err error) {
 }
 
 func (o *gitOps) handler(e *echo.Echo) {
-	e.GET("/:project/info/refs", echo.WrapHandler(
+	g := e.Group("/git")
+	g.GET("/:project/info/refs", echo.WrapHandler(
 		http.HandlerFunc(o.refs),
 	))
-	e.GET("/git-upload-pack", echo.WrapHandler(
+	g.POST("/:project/git-upload-pack", echo.WrapHandler(
 		http.HandlerFunc(o.up)),
 	)
-	e.GET("/git-receive-pack", echo.WrapHandler(
+	g.POST("/:project/git-receive-pack", echo.WrapHandler(
 		http.HandlerFunc(o.down),
 	))
 }
 
 func (o *gitOps) refs(w http.ResponseWriter, r *http.Request) {
+	rpc := r.URL.Query().Get("service")
 	if !o.setup(w, r) {
 		return
 	}
-	ep, err := o.endpoint(r)
+	ep, err := o.endpoint(r, "/info/refs")
 	if err != nil {
 		// TODO?
 		return
 	}
-	repo, err := o.repos.load(ep)
-	if err != nil {
-		// TODO?
+	h := w.Header()
+	h.Add(HeaderContentType, fmt.Sprintf("application/x-%s-advertisement", rpc))
+	h.Add("Cache-Control", "no-cache")
+	switch rpc {
+	case "git-upload-pack":
+		w.WriteHeader(http.StatusOK)
+		o.service(w, rpc)
+		err := o.upload(w, ep)
+		if err != nil {
+			//TODO
+		}
+	case "git-receive-pack":
+		w.WriteHeader(http.StatusOK)
+		o.service(w, rpc)
+		err := o.receive(w, ep)
+		if err != nil {
+			//TODO
+		}
+	default:
+		http.Error(w, "Not Found", 404)
 		return
 	}
-	ad := packp.NewAdvRefs()
-	refs, err := repo.References()
+}
+
+func (o *gitOps) service(w io.Writer, rpc string) {
+	enc := pktline.NewEncoder(w)
+	enc.EncodeString(fmt.Sprintf("# service=%s\n", rpc))
+	enc.Flush()
+}
+
+func (o *gitOps) upload(w io.Writer, ep *transport.Endpoint) error {
+	s, err := o.server.NewUploadPackSession(ep, nil)
 	if err != nil {
-		return
+		return err
 	}
-	err = refs.ForEach(func(p *plumbing.Reference) error {
-		return ad.AddReference(p)
-	})
+	ar, err := s.AdvertisedReferences()
 	if err != nil {
-		return
+		return err
 	}
-	o.setHeaders(w.Header(), "")
-	w.WriteHeader(http.StatusOK)
-	if err = ad.Encode(w); err != nil {
-		// TODO?
+	return ar.Encode(w)
+}
+
+func (o *gitOps) receive(w io.Writer, ep *transport.Endpoint) error {
+	s, err := o.server.NewReceivePackSession(ep, nil)
+	if err != nil {
+		return err
 	}
+	ar, err := s.AdvertisedReferences()
+	if err != nil {
+		return err
+	}
+	return ar.Encode(w)
 }
 
 func (o *gitOps) up(w http.ResponseWriter, r *http.Request) {
@@ -147,31 +183,36 @@ func (o *gitOps) up(w http.ResponseWriter, r *http.Request) {
 	}
 	s, err := o.upSession(r)
 	if err != nil {
+		o.e500(w)
 		return
 	}
-	buf := buffers.GetBytes()
-	defer buffers.PutBytes(buf)
-	ar, err := s.AdvertisedReferences()
-	if err != nil {
-		return
-	}
-	if err := ar.Encode(buf); err != nil {
-		return
+	rd := r.Body
+	if r.Header.Get(HeaderContentEncoding) == "gzip" {
+		rd, err = gzip.NewReader(r.Body)
+		if err != nil {
+			o.e500(w)
+			return
+		}
 	}
 	req := packp.NewUploadPackRequest()
-	if err := req.Decode(r.Body); err != nil {
+	if err := req.Decode(rd); err != nil {
+		o.e500(w)
 		return
 	}
 	resp, err := s.UploadPack(r.Context(), req)
 	if err != nil {
+		o.e500(w)
 		return
 	}
-	if err = resp.Encode(buf); err != nil {
+	if err = resp.Encode(w); err != nil {
 		return
 	}
 	o.setHeaders(w.Header(), "git-upload-pack")
 	w.WriteHeader(http.StatusOK)
-	io.Copy(w, buf)
+}
+
+func (o *gitOps) e500(w http.ResponseWriter) {
+	http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 }
 
 func (o *gitOps) down(w http.ResponseWriter, r *http.Request) {
@@ -182,30 +223,30 @@ func (o *gitOps) down(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	ar, err := s.AdvertisedReferences()
-	if err != nil {
-		return
-	}
-	buf := buffers.GetBytes()
-	defer buffers.PutBytes(buf)
-
-	if err := ar.Encode(buf); err != nil {
-		return
-	}
 	req := packp.NewReferenceUpdateRequest()
-	if err := req.Decode(r.Body); err != nil {
+	rd := r.Body
+	if r.Header.Get(HeaderContentEncoding) == "gzip" {
+		rd, err = gzip.NewReader(r.Body)
+		if err != nil {
+			o.e500(w)
+			return
+		}
+	}
+	if err := req.Decode(rd); err != nil {
+		o.e500(w)
 		return
 	}
 	resp, err := s.ReceivePack(r.Context(), req)
 	if err != nil {
+		o.e500(w)
 		return
 	}
-	if err = resp.Encode(buf); err != nil {
+	if err = resp.Encode(w); err != nil {
+		o.e500(w)
 		return
 	}
 	o.setHeaders(w.Header(), "git-receive-pack")
 	w.WriteHeader(http.StatusOK)
-	io.Copy(w, buf)
 }
 
 func (o *gitOps) setup(w http.ResponseWriter, r *http.Request) bool {
@@ -217,23 +258,23 @@ func (o *gitOps) setup(w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 
-func (o *gitOps) endpoint(r *http.Request) (*transport.Endpoint, error) {
+func (o *gitOps) endpoint(r *http.Request, service string) (*transport.Endpoint, error) {
 	var basic basicAuth
 	basic.init(r, false)
+	p := strings.TrimSuffix(r.URL.Path, service)
+	p = strings.TrimPrefix(p, "/git")
+	p = filepath.Join(o.opts.dir, filepath.FromSlash(p))
 	e := &transport.Endpoint{
 		Protocol: "http",
 		User:     basic.UserName,
 		Password: basic.Password,
-	}
-	p := strings.Split(r.URL.Path, "/") // TODO be robust and remove service prefix
-	if len(p) > 1 {
-		e.Path = p[1]
+		Path:     filepath.Clean(p),
 	}
 	return e, nil
 }
 
 func (o *gitOps) upSession(r *http.Request) (transport.UploadPackSession, error) {
-	ep, err := o.endpoint(r)
+	ep, err := o.endpoint(r, "/git-upload-pack")
 	if err != nil {
 		return nil, err
 	}
@@ -241,7 +282,7 @@ func (o *gitOps) upSession(r *http.Request) (transport.UploadPackSession, error)
 }
 
 func (o *gitOps) downSession(r *http.Request) (transport.ReceivePackSession, error) {
-	ep, err := o.endpoint(r)
+	ep, err := o.endpoint(r, "/git-receive-pack")
 	if err != nil {
 		return nil, err
 	}

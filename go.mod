@@ -25,6 +25,7 @@ require (
 	github.com/shurcooL/octicon v0.0.0-20191102190552-cbb32d6a785c
 	github.com/smallnest/weighted v0.0.0-20200122032019-adf21c9b8bd1
 	github.com/sourcegraph/jsonrpc2 v0.0.0-20191222043438-96c4efab7ee2
+	github.com/src-d/go-git v4.7.0+incompatible
 	github.com/uber-go/tally v3.3.14+incompatible
 	github.com/urfave/cli/v2 v2.1.1
 	go.uber.org/atomic v1.5.1
