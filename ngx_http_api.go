@@ -221,7 +221,7 @@ func newHTTPAPI(base string, httpCtx httpContext) http.Handler {
 
 func api500Error(echoCtx echo.Context, err error) error {
 	ctx := echoCtx.Request().Context()
-	errorLog(ctx, err)
+	logError(ctx, err.Error())
 	return echoCtx.JSON(
 		http.StatusInternalServerError,
 		newHTTPErrorResponse(http.StatusInternalServerError,

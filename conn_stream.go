@@ -24,28 +24,26 @@ func histogramBucket() tally.Buckets {
 	return tally.DefaultBuckets
 }
 
-func proxyConn(ctx context.Context, metrics collectorAPI, opts proxyConnOpts, local, remote net.Conn) error {
+func proxyConn(ctx context.Context, opts proxyConnOpts, local, remote net.Conn) error {
 	var n int
 	var err error
 	var firstRemote, firstLocal atomic.Bool
 	firstRemote.Store(true)
 	firstLocal.Store(true)
-	m := map[string]string{
-		"local_local":   local.LocalAddr().String(),
-		"local_remote":  local.RemoteAddr().String(),
-		"remote_local":  remote.LocalAddr().String(),
-		"remote_remote": remote.RemoteAddr().String(),
-	}
-	localRead := metrics.Counter(tcpLocalBytesRead, m)
-	localWrite := metrics.Counter(tcpLocalBytesWrite, m)
-
-	remoteRead := metrics.Counter(tcpRemoteBytesRead, m)
-	remoteWrite := metrics.Counter(tcpRemoteBytesWrite, m)
-
-	duration := metrics.Timer(tcpTotalDuration, m).Start()
+	var localRead, localWrite, remoteRead, remoteWrite int64
+	start := time.Now()
 	defer func() {
-		duration.Stop()
+		v := []string{
+			local.LocalAddr().String(), local.RemoteAddr().String(),
+			remote.LocalAddr().String(), remote.RemoteAddr().String(),
+		}
+		tcpLocalBytesRead.WithLabelValues(v...).Observe(float64(localRead))
+		tcpLocalBytesWritten.WithLabelValues(v...).Observe(float64(localWrite))
+		tcpRemoteBytesRead.WithLabelValues(v...).Observe(float64(remoteRead))
+		tcpRemoteBytesWritten.WithLabelValues(v...).Observe(float64(remoteWrite))
+		tcpStreamDuration.WithLabelValues(v...).Observe(float64(time.Since(start)))
 	}()
+
 	go func() {
 		buf := buffers.GetSlice()
 		defer func() {
@@ -67,7 +65,7 @@ func proxyConn(ctx context.Context, metrics collectorAPI, opts proxyConnOpts, lo
 			if firstLocal.Load() {
 				firstLocal.Store(false)
 			}
-			localRead.Inc(int64(n))
+			localRead += int64(n)
 
 			if opts.remote.writeTimeout != 0 {
 				remote.SetWriteDeadline(time.Now().Add(opts.remote.writeTimeout))
@@ -79,7 +77,7 @@ func proxyConn(ctx context.Context, metrics collectorAPI, opts proxyConnOpts, lo
 			if firstRemote.Load() {
 				firstRemote.Store(false)
 			}
-			remoteWrite.Inc(int64(n))
+			remoteWrite += int64(n)
 		}
 	}()
 	buf := buffers.GetSlice()
@@ -104,7 +102,7 @@ func proxyConn(ctx context.Context, metrics collectorAPI, opts proxyConnOpts, lo
 		if firstRemote.Load() {
 			firstRemote.Store(false)
 		}
-		remoteRead.Inc(int64(n))
+		remoteRead += int64(n)
 
 		if opts.local.writeTimeout != 0 {
 			local.SetWriteDeadline(time.Now().Add(opts.local.writeTimeout))
@@ -117,7 +115,7 @@ func proxyConn(ctx context.Context, metrics collectorAPI, opts proxyConnOpts, lo
 		if firstLocal.Load() {
 			firstLocal.Store(false)
 		}
-		localWrite.Inc(int64(n))
+		localWrite += int64(n)
 	}
 }
 
@@ -140,7 +138,7 @@ type stream interface {
 	config() proxyConnOpts
 }
 
-func streamListener(ctx context.Context, metrics collectorAPI, ls net.Listener, srv stream) error {
+func streamListener(ctx context.Context, ls net.Listener, srv stream) error {
 	for {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -150,12 +148,14 @@ func streamListener(ctx context.Context, metrics collectorAPI, ls net.Listener, 
 		if err != nil {
 			return err
 		}
-		metrics.Counter(tcpAcceptedConn, map[string]string{}).Inc(1)
-		go streamConn(ctx, metrics, l, srv)
+		tcpTotalAcceptedConnection.WithLabelValues(
+			l.LocalAddr().String(), l.RemoteAddr().String(),
+		).Inc()
+		go streamConn(ctx, l, srv)
 	}
 }
 
-func streamConn(ctx context.Context, mx collectorAPI, conn net.Conn, srv stream) error {
+func streamConn(ctx context.Context, conn net.Conn, srv stream) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -165,7 +165,7 @@ func streamConn(ctx context.Context, mx collectorAPI, conn net.Conn, srv stream)
 	}
 	defer remote.Close()
 	opts := srv.config()
-	return proxyConn(ctx, mx, opts, conn, remote)
+	return proxyConn(ctx, opts, conn, remote)
 }
 
 func show(ctx context.Context, err error) {
@@ -177,7 +177,6 @@ func show(ctx context.Context, err error) {
 type streamServer struct {
 	stream stream
 	ctx    context.Context
-	mx     *metricsCollector
 	cancel func()
 }
 
@@ -187,7 +186,7 @@ func (s *streamServer) init(ctx context.Context, sm stream, m *connManager) {
 }
 
 func (s *streamServer) Serve(ls net.Listener) error {
-	return streamListener(s.ctx, s.mx, ls, s.stream)
+	return streamListener(s.ctx, ls, s.stream)
 }
 
 func (s *streamServer) Close() error {

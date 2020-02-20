@@ -18,11 +18,11 @@ type management struct {
 func (m *management) init(ctx *serverCtx) {
 	m.ctx = ctx
 	h := echo.New()
-	h.Use(instrumentEcho(ctx.metrics))
+	h.Use(instrumentEcho)
 	h.Use(accessLog)
 	h.GET("/", m.index)
 	h.GET("/assets/*", m.static())
-	h.GET("/metrics", echo.WrapHandler(m.ctx.metrics.handler))
+	h.GET("/metrics", echo.WrapHandler(http.HandlerFunc(metricsHandler)))
 	var ops gitOpsOptions
 	ops.dir = filepath.Join(ctx.config.dir, "configs")
 	m.git.init(ops)

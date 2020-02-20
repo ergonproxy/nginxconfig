@@ -230,7 +230,6 @@ type serverCtx struct {
 		activeListener *httpListenOpts
 	}
 	fileCache *readWriterCloserCache
-	metrics   *metricsCollector
 }
 
 func (s *serverCtx) with(active httpListenOpts) *serverCtx {
@@ -242,7 +241,6 @@ func (s *serverCtx) with(active httpListenOpts) *serverCtx {
 	n.http.servers = s.http.servers
 	n.http.activeListener = &active
 	n.fileCache = s.fileCache
-	n.metrics = s.metrics
 	n.http.connManager = s.http.connManager
 	n.config = s.config
 	return n
@@ -331,8 +329,6 @@ func (s *serverCtx) init(ctx context.Context, stmt *Stmt, cfg *vinceConfiguratio
 	s.fileCache = new(readWriterCloserCache)
 	s.fileCache.initFile(ctx, fo)
 
-	s.metrics = new(metricsCollector)
-	s.metrics.init()
 	s.http.connManager = new(connManager)
 	s.http.connManager.init()
 }
