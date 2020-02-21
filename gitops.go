@@ -183,25 +183,25 @@ func (o *gitOps) up(w http.ResponseWriter, r *http.Request) {
 	}
 	s, err := o.upSession(r)
 	if err != nil {
-		o.e500(w)
+		e500(w)
 		return
 	}
 	rd := r.Body
 	if r.Header.Get(HeaderContentEncoding) == "gzip" {
 		rd, err = gzip.NewReader(r.Body)
 		if err != nil {
-			o.e500(w)
+			e500(w)
 			return
 		}
 	}
 	req := packp.NewUploadPackRequest()
 	if err := req.Decode(rd); err != nil {
-		o.e500(w)
+		e500(w)
 		return
 	}
 	resp, err := s.UploadPack(r.Context(), req)
 	if err != nil {
-		o.e500(w)
+		e500(w)
 		return
 	}
 	if err = resp.Encode(w); err != nil {
@@ -211,7 +211,7 @@ func (o *gitOps) up(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func (o *gitOps) e500(w http.ResponseWriter) {
+func e500(w http.ResponseWriter) {
 	http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 }
 
@@ -228,21 +228,21 @@ func (o *gitOps) down(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get(HeaderContentEncoding) == "gzip" {
 		rd, err = gzip.NewReader(r.Body)
 		if err != nil {
-			o.e500(w)
+			e500(w)
 			return
 		}
 	}
 	if err := req.Decode(rd); err != nil {
-		o.e500(w)
+		e500(w)
 		return
 	}
 	resp, err := s.ReceivePack(r.Context(), req)
 	if err != nil {
-		o.e500(w)
+		e500(w)
 		return
 	}
 	if err = resp.Encode(w); err != nil {
-		o.e500(w)
+		e500(w)
 		return
 	}
 	o.setHeaders(w.Header(), "git-receive-pack")
