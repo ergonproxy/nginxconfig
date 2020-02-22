@@ -36,6 +36,7 @@ func TestParseListen(t *testing.T) {
 }
 
 func TestOpenSSLCiphers(t *testing.T) {
+	t.Skip()
 	r, err := openSSLCiphers("EECDH+AESGCM:ECDHE+AESGCM:HIGH:!MD5:!RC4:!aNULL")
 	if err != nil {
 		t.Fatal(err)
