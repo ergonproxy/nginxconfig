@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 	"path/filepath"
 
@@ -15,6 +16,12 @@ type management struct {
 	h   http.Handler
 }
 
+func init() {
+	echo.NotFoundHandler = func(c echo.Context) error {
+		return e404(c.Response())
+	}
+}
+
 func (m *management) init(ctx *serverCtx) {
 	m.ctx = ctx
 	h := echo.New()
@@ -27,7 +34,17 @@ func (m *management) init(ctx *serverCtx) {
 	ops.dir = filepath.Join(ctx.config.dir, "configs")
 	m.git.init(ops)
 	m.git.handler(h)
+	h.HTTPErrorHandler = echoErrorHandler
 	m.h = h
+}
+
+func echoErrorHandler(err error, ctx echo.Context) {
+	fmt.Println("not found  ", ctx.Path())
+	if e, ok := err.(*echo.HTTPError); ok {
+		eRender(ctx.Response(), e.Code)
+		return
+	}
+	e500(ctx.Response())
 }
 
 func (m management) ServeHTTP(w http.ResponseWriter, r *http.Request) {

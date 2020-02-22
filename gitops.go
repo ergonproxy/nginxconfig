@@ -211,10 +211,6 @@ func (o *gitOps) up(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func e500(w http.ResponseWriter) {
-	http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-}
-
 func (o *gitOps) down(w http.ResponseWriter, r *http.Request) {
 	if !o.setup(w, r) {
 		return

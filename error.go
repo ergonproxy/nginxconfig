@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/ergongate/vince/templates"
 )
 
 // source https://en.wikipedia.org/wiki/List_of_HTTP_status_codes#nginx
@@ -82,4 +84,20 @@ func linkDocs(page ...string) string {
 
 func linkErrorDocs(code int) string {
 	return linkDocs("errors", strconv.FormatInt(int64(code), 10))
+}
+
+func e500(w http.ResponseWriter) {
+	eRender(w, http.StatusInternalServerError)
+}
+
+func e404(w http.ResponseWriter) error {
+	return eRender(w, http.StatusNotFound)
+}
+
+func eRender(w http.ResponseWriter, code int) error {
+	w.WriteHeader(code)
+	return templates.ExecHTML(w, "errors/error.html", map[string]interface{}{
+		"code": code,
+		"text": statusText(code),
+	})
 }
