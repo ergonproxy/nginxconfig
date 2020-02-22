@@ -17,7 +17,9 @@ require (
 	github.com/onsi/gomega v1.8.1 // indirect
 	github.com/open-policy-agent/opa v0.16.0
 	github.com/prometheus/client_golang v1.4.1
+	github.com/prometheus/client_model v0.2.0
 	github.com/prometheus/common v0.9.1
+	github.com/prometheus/prometheus v2.5.0+incompatible
 	github.com/rakyll/statik v0.1.6
 	github.com/shurcooL/octicon v0.0.0-20191102190552-cbb32d6a785c
 	github.com/smallnest/weighted v0.0.0-20200122032019-adf21c9b8bd1

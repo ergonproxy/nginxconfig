@@ -9,7 +9,11 @@ import (
 	"github.com/ergongate/vince/buffers"
 	"github.com/labstack/echo/v4"
 	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
+	"github.com/prometheus/prometheus/pkg/labels"
+	"github.com/prometheus/prometheus/pkg/timestamp"
+	"github.com/prometheus/prometheus/storage"
 )
 
 var (
@@ -226,4 +230,131 @@ func metricsHandler(w http.ResponseWriter, r *http.Request) {
 	header.Set(HeaderContentType, string(contentType))
 	header.Set(HeaderContentLength, fmt.Sprint(buf.Len()))
 	w.Write(buf.Bytes())
+}
+
+func storeMertics(app storage.Appender, f *dto.MetricFamily, ts time.Time) {
+	defTime := timestamp.FromTime(ts)
+	switch f.GetType() {
+	case dto.MetricType_HISTOGRAM:
+		for _, e := range histogramMetrics(f) {
+			t := defTime
+			if e.ts != 0 {
+				t = e.ts
+			}
+			app.Add(e.labels, t, e.value)
+		}
+	case dto.MetricType_SUMMARY:
+		for _, e := range summaryMetrics(f) {
+			t := defTime
+			if e.ts != 0 {
+				t = e.ts
+			}
+			app.Add(e.labels, t, e.value)
+		}
+	default:
+		for _, e := range basicMetrics(f) {
+			t := defTime
+			if e.ts != 0 {
+				t = e.ts
+			}
+			app.Add(e.labels, t, e.value)
+		}
+	}
+}
+
+type metricEntry struct {
+	labels labels.Labels
+	ts     int64
+	value  float64
+}
+
+func summaryMetrics(f *dto.MetricFamily) (o []metricEntry) {
+	name := f.GetName()
+	for _, m := range f.Metric {
+		base := labels.NewBuilder(nil)
+		ts := m.GetTimestampMs()
+		for _, lp := range m.Label {
+			base.Set(lp.GetName(), lp.GetValue())
+		}
+		s := m.GetSummary()
+		if s != nil {
+			o = append(o, metricEntryFor(name+"_sum", base.Labels(), ts, s.GetSampleSum()))
+			o = append(o, metricEntryFor(name+"_count", base.Labels(), ts, float64(s.GetSampleCount())))
+			for _, q := range s.GetQuantile() {
+				o = append(o, metricEntryFor(name, append(base.Labels(), labels.Label{
+					Name:  "quantile",
+					Value: fmt.Sprint(q.GetQuantile()),
+				}), ts, float64(q.GetValue())))
+			}
+		}
+	}
+	return
+}
+
+func histogramMetrics(f *dto.MetricFamily) (o []metricEntry) {
+	name := f.GetName()
+	for _, m := range f.Metric {
+		base := labels.NewBuilder(nil)
+		ts := m.GetTimestampMs()
+		for _, lp := range m.Label {
+			base.Set(lp.GetName(), lp.GetValue())
+		}
+		h := m.GetHistogram()
+		if h != nil {
+			o = append(o, metricEntryFor(name+"_sum", base.Labels(), ts, h.GetSampleSum()))
+			o = append(o, metricEntryFor(name+"_count", base.Labels(), ts, float64(h.GetSampleCount())))
+			for _, b := range h.GetBucket() {
+				o = append(o, metricEntryFor(name+"_size_bucket", append(base.Labels(), labels.Label{
+					Name:  "le",
+					Value: fmt.Sprint(b.GetUpperBound()),
+				}), ts, float64(b.GetCumulativeCount())))
+			}
+		}
+	}
+	return
+}
+
+func metricEntryFor(name string, base labels.Labels, ts int64, sum float64) metricEntry {
+	var o metricEntry
+	o.labels = append(labels.Labels{labels.Label{
+		Name:  "__name__",
+		Value: name,
+	}}, base...)
+	o.ts = ts
+	o.value = sum
+	return o
+}
+
+func basicMetrics(f *dto.MetricFamily) (o []metricEntry) {
+	for _, m := range f.Metric {
+		o = append(o, digestBasicMetric(*f.Name, m))
+	}
+	return
+}
+
+func digestBasicMetric(name string, m *dto.Metric) metricEntry {
+	var o metricEntry
+	o.labels = labels.Labels{labels.Label{
+		Name:  "__name__",
+		Value: name,
+	}}
+	for _, lp := range m.Label {
+		o.labels = append(o.labels, labels.Label{
+			Name:  *lp.Name,
+			Value: *lp.Value,
+		})
+	}
+	if m.TimestampMs != nil {
+		o.ts = *m.TimestampMs
+	}
+	if m.Gauge != nil {
+		o.value = m.Gauge.GetValue()
+	}
+	if m.Counter != nil {
+		o.value = m.Counter.GetValue()
+	}
+	if m.Untyped != nil {
+		o.value = m.Untyped.GetValue()
+	}
+	return o
 }
