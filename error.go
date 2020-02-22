@@ -2,8 +2,6 @@ package main
 
 import (
 	"net/http"
-	"strconv"
-	"strings"
 	"sync"
 
 	"github.com/ergongate/vince/templates"
@@ -30,8 +28,6 @@ const (
 	statusClientClosedRequest = 499
 )
 
-const docsSite = "https://docs.vince.co.tz/"
-
 var statusTextMap = map[int]string{
 	statusNoResponse:             "No Response",
 	statusRequestHeaderTooLarge:  "Request header too large",
@@ -53,37 +49,6 @@ func statusText(code int) string {
 		}
 	}
 	return http.StatusText(code)
-}
-
-type httpError struct {
-	Status int    `json:"status"`
-	Text   string `json:"text"`
-	Code   string `json:"code"`
-}
-
-type httpErrorResponse struct {
-	Error     httpError `json:"error"`
-	RequestID string    `json:"request_id"`
-	HREF      string    `json:"href"`
-}
-
-func newHTTPErrorResponse(code int, id string) httpErrorResponse {
-	return httpErrorResponse{
-		Error: httpError{
-			Status: code,
-			Text:   statusText(code),
-		},
-		RequestID: id,
-		HREF:      linkErrorDocs(code),
-	}
-}
-
-func linkDocs(page ...string) string {
-	return docsSite + strings.Join(page, "/")
-}
-
-func linkErrorDocs(code int) string {
-	return linkDocs("errors", strconv.FormatInt(int64(code), 10))
 }
 
 func e500(w http.ResponseWriter) {
