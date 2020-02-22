@@ -2,6 +2,7 @@ package templates
 
 import (
 	"html/template"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -22,14 +23,6 @@ const (
 	iso8601Milli        = "2006-01-02T15:04:05.000Z"
 	commonLogFormatTime = "02/Jan/2006:15:04:05 -0700"
 )
-
-// HTML returns template with all embedded templates loaded
-func HTML() *template.Template {
-	htmlOnce.Do(func() {
-		htmlTpl = template.Must(loadHTML())
-	})
-	return htmlTpl
-}
 
 // IsVariableFunc returns true if variable is a template function
 func IsVariableFunc(v string) bool {
@@ -132,4 +125,12 @@ func (m Meta) HTML() template.HTML {
 	attribute(m).html(s)
 	s.WriteRune('>')
 	return template.HTML(s.String())
+}
+
+// ExecHTML renders html template
+func ExecHTML(w io.Writer, name string, data interface{}) error {
+	htmlOnce.Do(func() {
+		htmlTpl = template.Must(loadHTML())
+	})
+	return htmlTpl.ExecuteTemplate(w, name, data)
 }

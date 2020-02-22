@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"html/template"
 	"net/http"
 	"net/url"
 	"strings"
@@ -240,7 +239,6 @@ func getOauth2Err(key oauth2Errkey) (value string) {
 type oauth2 struct {
 	store             kvStore
 	redirectSeparator string
-	templates         *template.Template
 	opts              oauth2Option
 }
 
@@ -272,7 +270,6 @@ func (o *oauth2) init(store kvStore, opts oauth2Option) error {
 			opts.CsrfSecret = csrf
 		}
 	}
-	o.templates = templates.HTML()
 	o.opts = opts
 	return nil
 }
@@ -516,7 +513,7 @@ func (o *oauth2) authorize(w http.ResponseWriter, r *http.Request) error {
 	}
 	if usr == nil {
 		// serve login page
-		return o.templates.ExecuteTemplate(w, "oauth/login.html", map[string]interface{}{
+		return templates.ExecHTML(w, "oauth/login.html", map[string]interface{}{
 			"Action": r.URL.String(),
 			"Title":  "vince oauth login",
 		})

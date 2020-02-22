@@ -47,7 +47,7 @@ func (m *management) index(ctx echo.Context) error {
 	with := new(templates.Context)
 	buf := buffers.GetBytes()
 	defer buffers.PutBytes(buf)
-	err := m.ctx.http.tpl.ExecuteTemplate(buf, "management/index.html", with)
+	err := templates.ExecHTML(buf, "management/index.html", with)
 	if err != nil {
 		return err
 	}

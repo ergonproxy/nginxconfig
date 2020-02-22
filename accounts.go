@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/ergongate/vince/templates"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -48,7 +49,7 @@ func (o *oauth2) register(w http.ResponseWriter, r *http.Request) {
 		e500(w)
 		return
 	}
-	if err := o.templates.ExecuteTemplate(w, "oauth/register.html", nil); err != nil {
+	if err := templates.ExecHTML(w, "oauth/register.html", nil); err != nil {
 		logError(ctx, fmt.Sprintf("oauth: error  saving user %v", err))
 		e500(w)
 		return

@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"html/template"
 	"net"
 	"net/http"
 	"os"
@@ -220,7 +219,6 @@ type serverCtx struct {
 	core   *rule
 	config *vinceConfiguration
 	http   struct {
-		tpl            *template.Template
 		defaultServer  map[string]*rule
 		address        map[string]httpListenOpts
 		serverRules    map[string][]*rule
@@ -235,7 +233,6 @@ type serverCtx struct {
 func (s *serverCtx) with(active httpListenOpts) *serverCtx {
 	n := new(serverCtx)
 	n.core = s.core
-	n.http.tpl = s.http.tpl
 	n.http.serverRules = s.http.serverRules
 	n.http.listeners = s.http.listeners
 	n.http.servers = s.http.servers
@@ -321,7 +318,6 @@ func (s *serverCtx) init(ctx context.Context, stmt *Stmt, cfg *vinceConfiguratio
 	s.http.servers = make(map[string]*http.Server)
 
 	core := ruleFromStmt(stmt, nil)
-	s.http.tpl = templates.HTML()
 	s.core = core
 	s.config = cfg
 	var fo readWriterCloserCacheOption
