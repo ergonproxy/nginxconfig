@@ -623,5 +623,8 @@ func start(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+	if err = c.setup(); err != nil {
+		return err
+	}
 	return startEverything(context.Background(), c)
 }

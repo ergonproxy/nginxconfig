@@ -16,17 +16,59 @@ type vinceConfiguration struct {
 	// that vince uses.
 	//
 	// By default this is the directory in which vince.conf is specified.
-	dir string
-
+	dir  string
+	dirs struct {
+		metrics string
+		auth    string
+		backups string
+		vince   string
+	}
 	// vince.conf
-	confFile string
-
+	confFile    string
 	defaultPort int
-
-	management struct {
+	management  struct {
 		enabled bool
 		port    int
 	}
+}
+
+func (c *vinceConfiguration) setup() error {
+	fi, err := os.Stat(c.dir)
+	if err != nil {
+		return err
+	}
+	c.dirs.metrics = filepath.Join(c.dir, "metrics")
+	c.dirs.auth = filepath.Join(c.dir, "auth")
+	c.dirs.backups = filepath.Join(c.dir, "backups")
+	c.dirs.vince = filepath.Join(c.dir, "vince")
+	return c.checkDirs(fi.Mode(),
+		c.dirs.auth,
+		c.dirs.metrics,
+		c.dirs.backups,
+		c.dirs.vince,
+	)
+}
+
+func (c *vinceConfiguration) checkDirs(mode os.FileMode, dirs ...string) error {
+	for _, dir := range dirs {
+		if err := c.checkDir(dir, mode); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *vinceConfiguration) checkDir(path string, mode os.FileMode) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return os.MkdirAll(path, mode)
+		}
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("vince: %q is not a directory", path)
+	}
+	return nil
 }
 
 type vinceDatabases struct {
