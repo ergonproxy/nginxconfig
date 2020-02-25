@@ -124,7 +124,7 @@ func process(ctx context.Context, srvCtx *serverCtx, config *vinceConfiguration)
 	}
 	for k, rules := range srvCtx.http.serverRules {
 		opts := srvCtx.http.address[k]
-		srv, err := createHTTPServer(ctx, srvCtx, rules, opts)
+		srv, err := createHTTPServer(ctx, srvCtx, vinceHandler(rules), opts)
 		if err != nil {
 			return err
 		}
@@ -156,29 +156,33 @@ func startEverything(mainCtx context.Context, config *vinceConfiguration, ready 
 	defer func() {
 		srvCtx.shutdown(context.Background())
 	}()
-
+	if config.management.enabled {
+		mopts := httpListenOpts{
+			net:      "tcp",
+			addrPort: fmt.Sprintf(":%d", config.management.port),
+		}
+		ls, err := net.Listen(mopts.net, mopts.addrPort)
+		if err != nil {
+			return err
+		}
+		srvCtx.http.listeners[mopts.addrPort] = ls
+		m := new(management)
+		m.init(srvCtx.with(mopts))
+		s, err := createHTTPServer(ctx, &srvCtx,
+			func(ctx context.Context) http.Handler {
+				return m
+			},
+			mopts,
+		)
+		if err != nil {
+			return err
+		}
+		srvCtx.http.servers[mopts.addrPort] = s
+	}
 	if err := process(ctx, &srvCtx, config); err != nil {
 		return err
 	}
-	if config.management.enabled {
-		l, err := net.Listen("tcp", fmt.Sprintf(":%d", config.management.port))
-		if err != nil {
-			// TODO log
-			fmt.Println("vince: failed to start management server ", err)
-		} else {
-			srvCtx.http.address[l.Addr().String()] = httpListenOpts{
-				net:      l.Addr().Network(),
-				addrPort: l.Addr().String(),
-			}
-			srvCtx.http.listeners[l.Addr().String()] = l
-			m := new(management)
-			m.init(&srvCtx)
-			srv := &http.Server{Handler: m}
-			srvCtx.http.servers[l.Addr().String()] = srv
-			fmt.Println("vince: staring management server at ", l.Addr().String())
-			go srv.Serve(l)
-		}
-	}
+
 	if len(ready) > 0 {
 		ready[0]()
 	}
@@ -215,6 +219,10 @@ func startEverything(mainCtx context.Context, config *vinceConfiguration, ready 
 	}
 }
 
+func startManagementServer(ctx context.Context, srv *serverCtx, opts httpListenOpts) {
+
+}
+
 type serverCtx struct {
 	core   *rule
 	config *vinceConfiguration
@@ -225,7 +233,7 @@ type serverCtx struct {
 		listeners      map[string]net.Listener
 		servers        map[string]*http.Server
 		connManager    *connManager
-		activeListener *httpListenOpts
+		activeListener httpListenOpts
 	}
 	fileCache *readWriterCloserCache
 }
@@ -236,7 +244,7 @@ func (s *serverCtx) with(active httpListenOpts) *serverCtx {
 	n.http.serverRules = s.http.serverRules
 	n.http.listeners = s.http.listeners
 	n.http.servers = s.http.servers
-	n.http.activeListener = &active
+	n.http.activeListener = active
 	n.fileCache = s.fileCache
 	n.http.connManager = s.http.connManager
 	n.config = s.config
@@ -329,7 +337,7 @@ func (s *serverCtx) init(ctx context.Context, stmt *Stmt, cfg *vinceConfiguratio
 	s.http.connManager.init()
 }
 
-func createHTTPServer(ctx context.Context, srv *serverCtx, servers []*rule, opts httpListenOpts) (*http.Server, error) {
+func createHTTPServer(ctx context.Context, srv *serverCtx, hand func(context.Context) http.Handler, opts httpListenOpts) (*http.Server, error) {
 	servCtx := srv.with(opts)
 	ctx = context.WithValue(ctx, serverCtxKey{}, servCtx)
 	s := &http.Server{}
@@ -338,7 +346,7 @@ func createHTTPServer(ctx context.Context, srv *serverCtx, servers []*rule, opts
 	}
 	s.ConnState = srv.http.connManager.manageConnState
 	s.ConnContext = srv.http.connManager.connContext
-	s.Handler = vinceHandler(ctx, servers)
+	s.Handler = hand(ctx)
 	return s, nil
 }
 
@@ -547,41 +555,42 @@ func (h *handlerMatch) find(name string) *rule {
 	return h.defaultServer
 }
 
-func vinceHandler(ctx context.Context, servers []*rule) http.Handler {
-	srvCtx := ctx.Value(serverCtxKey{}).(*serverCtx)
-	var hm handlerMatch
-	hm.init(servers, srvCtx.http.defaultServer[srvCtx.http.activeListener.addrPort])
-
-	location := new(sync.Map)
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-		variable := ctx.Value(variables{}).(map[string]interface{})
-		setRequestVariables(variable, r)
-		var srv *rule
-		if len(servers) == 1 {
-			srv = servers[0]
-		} else {
-			srv = hm.find(r.Host)
-		}
-		if srv == nil {
-			srv = servers[0]
-		}
-		var loc *locationMatch
-		if v, ok := location.Load(srv); ok {
-			loc = v.(*locationMatch)
-		} else {
-			loc = new(locationMatch)
-			loc.load(srv)
-			location.Store(srv, loc)
-		}
-		if l := loc.match(r.URL.Path); l != nil {
-			c := l.rule.collect(nil)
-			variable[vRequestMatchKind] = l
-			srvCtx.chain(overide(c)...).then(nil).ServeHTTP(w, r)
-			return
-		}
-		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
-	})
+func vinceHandler(servers []*rule) func(context.Context) http.Handler {
+	return func(ctx context.Context) http.Handler {
+		srvCtx := ctx.Value(serverCtxKey{}).(*serverCtx)
+		var hm handlerMatch
+		hm.init(servers, srvCtx.http.defaultServer[srvCtx.http.activeListener.addrPort])
+		location := new(sync.Map)
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			variable := ctx.Value(variables{}).(map[string]interface{})
+			setRequestVariables(variable, r)
+			var srv *rule
+			if len(servers) == 1 {
+				srv = servers[0]
+			} else {
+				srv = hm.find(r.Host)
+			}
+			if srv == nil {
+				srv = servers[0]
+			}
+			var loc *locationMatch
+			if v, ok := location.Load(srv); ok {
+				loc = v.(*locationMatch)
+			} else {
+				loc = new(locationMatch)
+				loc.load(srv)
+				location.Store(srv, loc)
+			}
+			if l := loc.match(r.URL.Path); l != nil {
+				c := l.rule.collect(nil)
+				variable[vRequestMatchKind] = l
+				srvCtx.chain(overide(c)...).then(nil).ServeHTTP(w, r)
+				return
+			}
+			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+		})
+	}
 }
 
 type handler interface {

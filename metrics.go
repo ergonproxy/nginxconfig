@@ -23,7 +23,7 @@ var (
 			Subsystem: "http",
 			Name:      "total_requests",
 		},
-		[]string{"code", "method", "path"},
+		[]string{"server", "code", "method", "handler"},
 	)
 	httpRequestDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
@@ -31,7 +31,7 @@ var (
 			Subsystem: "http",
 			Name:      "request_duration",
 		},
-		[]string{"code", "method", "path"},
+		[]string{"server", "code", "method", "handler"},
 	)
 	httpRequestSize = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
@@ -39,7 +39,7 @@ var (
 			Subsystem: "http",
 			Name:      "request_size",
 		},
-		[]string{"code", "method", "path"},
+		[]string{"server", "code", "method", "handler"},
 	)
 	httpResponseSize = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
@@ -47,7 +47,7 @@ var (
 			Subsystem: "http",
 			Name:      "response_size",
 		},
-		[]string{"code", "method", "path"},
+		[]string{"server", "code", "method", "handler"},
 	)
 
 	tcpLocalBytesRead = prometheus.NewHistogramVec(
@@ -150,6 +150,8 @@ func (w *wrapResponseWriter) Write(b []byte) (n int, err error) {
 
 func instrumentEcho(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
+		srv := c.Request().Context().Value(serverCtxKey{}).(*serverCtx)
+		opts := srv.http.activeListener
 		start := time.Now()
 		err := next(c)
 		duration := time.Since(start)
@@ -161,16 +163,16 @@ func instrumentEcho(next echo.HandlerFunc) echo.HandlerFunc {
 		size := computeApproximateRequestSize(c.Request())
 
 		httpRequestDuration.WithLabelValues(
-			code, c.Request().Method, c.Path(),
+			opts.addrPort, code, c.Request().Method, c.Path(),
 		).Observe(float64(duration))
 		httpRequestSize.WithLabelValues(
-			code, c.Request().Method, c.Path(),
+			opts.addrPort, code, c.Request().Method, c.Path(),
 		).Observe(float64(size))
 		httpResponseSize.WithLabelValues(
-			code, c.Request().Method, c.Path(),
+			opts.addrPort, code, c.Request().Method, c.Path(),
 		).Observe(float64(c.Response().Size))
 		httpTotalRequests.WithLabelValues(
-			code, c.Request().Method, c.Path(),
+			opts.addrPort, code, c.Request().Method, c.Path(),
 		).Inc()
 		return err
 	}
@@ -178,6 +180,8 @@ func instrumentEcho(next echo.HandlerFunc) echo.HandlerFunc {
 
 func instrumentHandler(next handler) handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		srv := r.Context().Value(serverCtxKey{}).(*serverCtx)
+		opts := srv.http.activeListener
 		d := &wrapResponseWriter{ResponseWriter: w}
 		start := time.Now()
 		next.ServeHTTP(d, r)
@@ -192,13 +196,13 @@ func instrumentHandler(next handler) handler {
 			code, r.Method, r.URL.Path,
 		).Observe(float64(duration))
 		httpRequestSize.WithLabelValues(
-			code, r.Method, r.URL.Path,
+			opts.addrPort, code, r.Method, r.URL.Path,
 		).Observe(float64(size))
 		httpResponseSize.WithLabelValues(
-			code, r.Method, r.URL.Path,
+			opts.addrPort, code, r.Method, r.URL.Path,
 		).Observe(float64(d.size))
 		httpTotalRequests.WithLabelValues(
-			code, r.Method, r.URL.Path,
+			opts.addrPort, code, r.Method, r.URL.Path,
 		).Inc()
 	})
 }
