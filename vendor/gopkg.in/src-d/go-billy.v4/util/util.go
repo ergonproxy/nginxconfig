@@ -16,6 +16,7 @@ import (
 // RemoveAll returns nil (no error).
 func RemoveAll(fs billy.Basic, path string) error {
 	fs, path = getUnderlyingAndPath(fs, path)
+
 	if r, ok := fs.(removerAll); ok {
 		return r.RemoveAll(path)
 	}
