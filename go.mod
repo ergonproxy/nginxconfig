@@ -9,7 +9,7 @@ require (
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/hashicorp/golang-lru v0.5.1 // indirect
 	github.com/hashicorp/raft v1.1.2
-	github.com/labstack/echo/v4 v4.1.13
+	github.com/labstack/echo/v4 v4.9.0
 	github.com/mikioh/tcp v0.0.0-20190314235350-803a9b46060c
 	github.com/mikioh/tcpinfo v0.0.0-20190314235526-30a79bb1804b
 	github.com/mikioh/tcpopt v0.0.0-20190314235656-172688c1accc // indirect
@@ -27,8 +27,8 @@ require (
 	github.com/uber-go/tally v3.3.14+incompatible
 	github.com/urfave/cli/v2 v2.1.1
 	go.uber.org/atomic v1.5.1
-	golang.org/x/crypto v0.0.0-20191227163750-53104e6ec876
-	golang.org/x/net v0.0.0-20191209160850-c0dbc17a3553
+	golang.org/x/crypto v0.0.0-20210817164053-32db794688a5
+	golang.org/x/net v0.0.0-20211015210444-4f30a5c0130f
 	gopkg.in/src-d/go-git.v4 v4.13.1
 	gopkg.in/yaml.v2 v2.2.8 // indirect
 )
