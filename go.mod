@@ -16,9 +16,9 @@ require (
 	github.com/onsi/ginkgo v1.11.0 // indirect
 	github.com/onsi/gomega v1.8.1 // indirect
 	github.com/open-policy-agent/opa v0.16.0
-	github.com/prometheus/client_golang v1.4.1
+	github.com/prometheus/client_golang v1.11.1
 	github.com/prometheus/client_model v0.2.0
-	github.com/prometheus/common v0.9.1
+	github.com/prometheus/common v0.26.0
 	github.com/prometheus/prometheus v2.5.0+incompatible
 	github.com/rakyll/statik v0.1.6
 	github.com/shurcooL/octicon v0.0.0-20191102190552-cbb32d6a785c
@@ -27,8 +27,7 @@ require (
 	github.com/uber-go/tally v3.3.14+incompatible
 	github.com/urfave/cli/v2 v2.1.1
 	go.uber.org/atomic v1.5.1
-	golang.org/x/crypto v0.0.0-20191227163750-53104e6ec876
-	golang.org/x/net v0.0.0-20191209160850-c0dbc17a3553
+	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
+	golang.org/x/net v0.0.0-20200625001655-4c5254603344
 	gopkg.in/src-d/go-git.v4 v4.13.1
-	gopkg.in/yaml.v2 v2.2.8 // indirect
 )
