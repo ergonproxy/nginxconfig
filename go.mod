@@ -27,8 +27,8 @@ require (
 	github.com/uber-go/tally v3.3.14+incompatible
 	github.com/urfave/cli/v2 v2.1.1
 	go.uber.org/atomic v1.5.1
-	golang.org/x/crypto v0.0.0-20191227163750-53104e6ec876
-	golang.org/x/net v0.0.0-20191209160850-c0dbc17a3553
+	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519
+	golang.org/x/net v0.7.0
 	gopkg.in/src-d/go-git.v4 v4.13.1
 	gopkg.in/yaml.v2 v2.2.8 // indirect
 )
